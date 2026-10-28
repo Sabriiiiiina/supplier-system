@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>供应商管理系统</title>
+  <style>
+/* ========== 供应商管理系统 · 基础样式（骨架版，不含业务内容） ========== */
+:root {
+  --bg: #f5f7fa;
+  --surface: #ffffff;
+  --border: #e5e9f0;
+  --text: #1f2d3d;
+  --text-secondary: #6b7a90;
+  --primary: #2f6bff;
+  --primary-soft: #eaf1ff;
+  --radius: 10px;
+  --sidebar-w: 232px;
+  --sidebar-w-collapsed: 64px;
+  --topbar-h: 60px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app { display: flex; height: 100vh; overflow: hidden; }
+
+/* ---------- 侧边栏 ---------- */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  transition: width .2s ease;
+  flex-shrink: 0;
+}
+.sidebar.collapsed { width: var(--sidebar-w-collapsed); }
+.sidebar.collapsed .logo-text,
+.sidebar.collapsed .nav-item span:not(.nav-icon),
+.sidebar.collapsed .sidebar-footer { display: none; }
+.sidebar.collapsed .nav-item { justify-content: center; }
+
+.sidebar-logo {
+  height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+.logo-mark {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.logo-text { font-weight: 600; font-size: 15px; white-space: nowrap; }
+
+.sidebar-nav { flex: 1; padding: 12px 8px; overflow-y: auto; }
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  margin-bottom: 4px;
+  transition: background .15s, color .15s;
+  white-space: nowrap;
+}
+.nav-item:hover { background: var(--primary-soft); color: var(--primary); }
+.nav-item.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+.nav-icon { width: 20px; text-align: center; font-size: 15px; flex-shrink: 0; }
+
+.sidebar-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+.version-tag { font-size: 12px; color: var(--text-secondary); }
+
+/* ---------- 主区域 ---------- */
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+.topbar {
+  height: var(--topbar-h);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+  flex-shrink: 0;
+}
+.icon-btn {
+  background: none;
+  border: none;
+  font-size: 17px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  width: 34px; height: 34px;
+  border-radius: 8px;
+}
+.icon-btn:hover { background: var(--primary-soft); color: var(--primary); }
+
+.breadcrumb { font-weight: 600; font-size: 15px; }
+
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.global-search {
+  width: 220px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-secondary);
+  outline: none;
+  font-size: 13px;
+}
+.user-chip {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.avatar {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 600;
+}
+
+.content { flex: 1; overflow-y: auto; padding: 24px; }
+
+/* ---------- 空状态占位 ---------- */
+.empty-state {
+  max-width: 720px;
+  margin: 8vh auto 0;
+  text-align: center;
+}
+.empty-icon {
+  width: 72px; height: 72px;
+  margin: 0 auto 20px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px;
+}
+.empty-title { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+.empty-desc { color: var(--text-secondary); margin-bottom: 28px; }
+
+.empty-placeholder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.placeholder-card {
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 20px 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+@media (max-width: 768px) {
+  .sidebar { position: fixed; z-index: 20; height: 100%; }
+  .sidebar.collapsed { width: 0; overflow: hidden; }
+  .global-search { display: none; }
+}
+
+/* ========== 界面设计器 ========== */
+#designToggle { font-size: 16px; }
+
+.design-overlay {
+  position: fixed; inset: 0;
+  background: rgba(15, 20, 25, .32);
+  opacity: 0; visibility: hidden;
+  transition: opacity .2s ease, visibility .2s;
+  z-index: 40;
+}
+.design-overlay.show { opacity: 1; visibility: visible; }
+
+.design-panel {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: 340px; max-width: 92vw;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: -8px 0 24px rgba(0, 0, 0, .08);
+  transform: translateX(100%);
+  transition: transform .25s ease;
+  z-index: 41;
+  display: flex; flex-direction: column;
+}
+.design-panel.open { transform: translateX(0); }
+
+.design-panel-head {
+  height: 56px; padding: 0 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.design-panel-title { font-weight: 600; font-size: 15px; }
+
+.design-panel-body { flex: 1; overflow-y: auto; padding: 16px; }
+
+.design-section { margin-bottom: 22px; }
+.design-section-title {
+  font-size: 12px; color: var(--text-secondary);
+  margin-bottom: 10px; letter-spacing: .5px;
+}
+
+.design-field { display: block; margin-bottom: 10px; }
+.design-field > span {
+  display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 5px;
+}
+.design-field input[type="text"] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+.design-field input[type="text"]:focus { border-color: var(--primary); }
+.design-field input[type="color"] {
+  width: 100%; height: 40px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg); padding: 4px; cursor: pointer;
+}
+
+.color-swatches { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.color-swatch {
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 2px solid transparent; cursor: pointer;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .6);
+}
+.color-swatch.active { border-color: var(--text); }
+
+.theme-toggle { display: flex; gap: 10px; }
+.theme-option {
+  flex: 1; padding: 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--text); cursor: pointer; font-size: 13px;
+}
+.theme-option.active {
+  border-color: var(--primary); background: var(--primary-soft);
+  color: var(--primary); font-weight: 600;
+}
+
+.design-panel-foot {
+  padding: 14px 16px; border-top: 1px solid var(--border);
+  display: flex; gap: 10px; flex-shrink: 0;
+}
+.btn { flex: 1; padding: 10px; border-radius: 8px; font-size: 14px; cursor: pointer; border: none; }
+.btn-primary { background: var(--primary); color: #fff; font-weight: 600; }
+.btn-primary:hover { filter: brightness(1.06); }
+.btn-ghost { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+.btn-ghost:hover { border-color: var(--text-secondary); }
+
+.toast {
+  position: fixed; left: 50%; bottom: 32px;
+  transform: translate(-50%, 20px);
+  background: #1f2d3d; color: #fff;
+  padding: 10px 18px; border-radius: 8px; font-size: 13px;
+  opacity: 0; transition: all .3s ease; z-index: 60;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .18);
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ========== 深色主题 ========== */
+body[data-theme="dark"] {
+  --bg: #0f1419;
+  --surface: #1a212b;
+  --border: #2a3442;
+  --text: #e6ebf2;
+  --text-secondary: #8b98a8;
+}
+
+</style>
+</head>
+<body>
+  <div class="app">
+    <!-- 侧边栏 -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-mark" id="logo-mark">供</div>
+        <span class="logo-text" id="logo-text">供应商管理系统</span>
+      </div>
+      <nav class="sidebar-nav" id="sidebarNav">
+        <a class="nav-item active" href="#/dashboard" data-route="dashboard">
+          <span class="nav-icon">▦</span><span class="nav-label">工作台</span>
+        </a>
+        <a class="nav-item" href="#/suppliers" data-route="suppliers">
+          <span class="nav-icon">▤</span><span class="nav-label">供应商管理</span>
+        </a>
+        <a class="nav-item" href="#/approval" data-route="approval">
+          <span class="nav-icon">✓</span><span class="nav-label">准入审批</span>
+        </a>
+        <a class="nav-item" href="#/performance" data-route="performance">
+          <span class="nav-icon">◔</span><span class="nav-label">绩效评估</span>
+        </a>
+        <a class="nav-item" href="#/contracts" data-route="contracts">
+          <span class="nav-icon">▣</span><span class="nav-label">合同管理</span>
+        </a>
+        <a class="nav-item" href="#/settings" data-route="settings">
+          <span class="nav-icon">⚙</span><span class="nav-label">系统设置</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <span class="version-tag">v0.1 · 骨架版</span>
+      </div>
+    </aside>
+
+    <!-- 主区域 -->
+    <div class="main">
+      <!-- 顶栏 -->
+      <header class="topbar">
+        <button class="icon-btn" id="menuToggle" title="收起/展开菜单">☰</button>
+        <div class="breadcrumb" id="breadcrumb">工作台</div>
+        <div class="topbar-right">
+          <button class="icon-btn" id="designToggle" title="界面设计器">🎨</button>
+          <input type="search" class="global-search" id="globalSearch" placeholder="全局搜索（待接入）" disabled />
+          <button class="icon-btn" title="通知（待接入）">🔔</button>
+          <div class="user-chip">
+            <div class="avatar">U</div>
+            <span>未登录</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- 页面内容容器（由路由渲染，当前仅空状态占位） -->
+      <main class="content" id="pageContainer"></main>
+    </div>
+  </div>
+
+  <!-- 空状态模板 -->
+  <template id="emptyStateTpl">
+    <div class="empty-state">
+      <div class="empty-icon">▢</div>
+      <h2 class="empty-title"></h2>
+      <p class="empty-desc">此模块暂未填充内容，仅搭建页面框架。</p>
+      <div class="empty-placeholder-grid"></div>
+    </div>
+  </template>
+
+  <!-- 界面设计器：遮罩 + 右侧抽屉 -->
+  <div class="design-overlay" id="designOverlay"></div>
+  <aside class="design-panel" id="designPanel">
+    <div class="design-panel-head">
+      <div class="design-panel-title">🎨 界面设计器</div>
+      <button class="icon-btn" id="designClose" title="关闭">✕</button>
+    </div>
+    <div class="design-panel-body">
+      <section class="design-section">
+        <h3 class="design-section-title">站点信息</h3>
+        <label class="design-field">
+          <span>站点标题</span>
+          <input type="text" id="designSiteName" />
+        </label>
+        <label class="design-field">
+          <span>Logo 标识（1–2 个字）</span>
+          <input type="text" id="designLogoMark" maxlength="2" />
+        </label>
+      </section>
+
+      <section class="design-section">
+        <h3 class="design-section-title">左侧导航名称</h3>
+        <div id="designNavList"></div>
+      </section>
+
+      <section class="design-section">
+        <h3 class="design-section-title">主色调</h3>
+        <div class="color-swatches" id="colorSwatches"></div>
+        <label class="design-field">
+          <span>自定义颜色</span>
+          <input type="color" id="designCustomColor" />
+        </label>
+      </section>
+
+      <section class="design-section">
+        <h3 class="design-section-title">外观主题</h3>
+        <div class="theme-toggle">
+          <button type="button" class="theme-option" data-theme-choice="light">☀️ 浅色</button>
+          <button type="button" class="theme-option" data-theme-choice="dark">🌙 深色</button>
+        </div>
+      </section>
+    </div>
+    <div class="design-panel-foot">
+      <button class="btn btn-ghost" id="designReset">恢复默认</button>
+      <button class="btn btn-primary" id="designSave">保存设计</button>
+    </div>
+  </aside>
+
+  <script>
+/* ========== 供应商管理系统 · 路由渲染 + 界面设计器 ========== */
+(function () {
+  "use strict";
+
+  // ---- 模块定义：名称 + 图标 + 空占位区块（不含业务数据）----
+  var MODULES = {
+    dashboard: {
+      title: "工作台", icon: "▦",
+      blocks: ["数据概览（待接入）", "待办事项（待接入）", "快捷入口（待接入）"]
+    },
+    suppliers: {
+      title: "供应商管理", icon: "▤",
+      blocks: ["供应商列表（待接入）", "筛选与搜索（待接入）", "新增/编辑表单（待接入）"]
+    },
+    approval: {
+      title: "准入审批", icon: "✓",
+      blocks: ["审批流程配置（待接入）", "待审批列表（待接入）", "审批记录（待接入）"]
+    },
+    performance: {
+      title: "绩效评估", icon: "◔",
+      blocks: ["评估指标（待接入）", "评分看板（待接入）", "评估周期（待接入）"]
+    },
+    contracts: {
+      title: "合同管理", icon: "▣",
+      blocks: ["合同台账（待接入）", "到期提醒（待接入）", "附件管理（待接入）"]
+    },
+    settings: {
+      title: "系统设置", icon: "⚙",
+      blocks: ["组织架构（待接入）", "角色权限（待接入）", "字段与字典配置（待接入）"]
+    }
+  };
+
+  var DEFAULT_ROUTE = "dashboard";
+  var STORAGE_KEY = "supplier-system-design-v1";
+
+  // ---- 设计配置默认值 ----
+  var DESIGN_DEFAULTS = {
+    siteName: "供应商管理系统",
+    logoMark: "供",
+    primaryColor: "#2f6bff",
+    theme: "light",
+    navLabels: {
+      dashboard: "工作台",
+      suppliers: "供应商管理",
+      approval: "准入审批",
+      performance: "绩效评估",
+      contracts: "合同管理",
+      settings: "系统设置"
+    }
+  };
+
+  var PRESET_COLORS = ["#2f6bff", "#00b4a0", "#7c5cff", "#22a06b", "#ff7a2f", "#e5484d"];
+
+  // ---- DOM 引用 ----
+  var pageContainer = document.getElementById("pageContainer");
+  var breadcrumb = document.getElementById("breadcrumb");
+  var sidebar = document.getElementById("sidebar");
+  var menuToggle = document.getElementById("menuToggle");
+  var navItems = Array.prototype.slice.call(document.querySelectorAll(".nav-item"));
+
+  var designToggle = document.getElementById("designToggle");
+  var designPanel = document.getElementById("designPanel");
+  var designOverlay = document.getElementById("designOverlay");
+  var designClose = document.getElementById("designClose");
+  var designSiteName = document.getElementById("designSiteName");
+  var designLogoMark = document.getElementById("designLogoMark");
+  var designNavList = document.getElementById("designNavList");
+  var colorSwatches = document.getElementById("colorSwatches");
+  var designCustomColor = document.getElementById("designCustomColor");
+  var designReset = document.getElementById("designReset");
+  var designSave = document.getElementById("designSave");
+
+  // ---- 配置读写 ----
+  function loadConfig() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        var saved = JSON.parse(raw);
+        var merged = {};
+        var k, r;
+        for (k in DESIGN_DEFAULTS) { merged[k] = DESIGN_DEFAULTS[k]; }
+        for (k in saved) { merged[k] = saved[k]; }
+        if (!merged.navLabels) { merged.navLabels = {}; }
+        for (r in DESIGN_DEFAULTS.navLabels) {
+          if (!merged.navLabels[r]) { merged.navLabels[r] = DESIGN_DEFAULTS.navLabels[r]; }
+        }
+        return merged;
+      }
+    } catch (e) { /* 忽略损坏数据 */ }
+    return JSON.parse(JSON.stringify(DESIGN_DEFAULTS));
+  }
+
+  var config = loadConfig();
+
+  function saveConfig() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(config)); } catch (e) {}
+  }
+
+  function hexToRgb(hex) {
+    var h = hex.replace("#", "");
+    if (h.length === 3) { h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2]; }
+    var n = parseInt(h, 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+
+  function applyPrimary(hex) {
+    var rgb = hexToRgb(hex);
+    document.documentElement.style.setProperty("--primary", hex);
+    if (config.theme === "dark") {
+      document.documentElement.style.setProperty(
+        "--primary-soft", "rgba(" + rgb.r + "," + rgb.g + "," + rgb.b + ",0.18)");
+    } else {
+      var r = Math.round(rgb.r + (255 - rgb.r) * 0.88);
+      var g = Math.round(rgb.g + (255 - rgb.g) * 0.88);
+      var b = Math.round(rgb.b + (255 - rgb.b) * 0.88);
+      document.documentElement.style.setProperty("--primary-soft", "rgb(" + r + "," + g + "," + b + ")");
+    }
+  }
+
+  function applyTheme() {
+    document.body.setAttribute("data-theme", config.theme);
+    applyPrimary(config.primaryColor);
+  }
+
+  function applySiteInfo() {
+    document.getElementById("logo-mark").textContent = config.logoMark || "供";
+    document.getElementById("logo-text").textContent = config.siteName || "供应商管理系统";
+  }
+
+  function applyNavLabels() {
+    Object.keys(MODULES).forEach(function (route) {
+      var label = config.navLabels[route] || DESIGN_DEFAULTS.navLabels[route];
+      MODULES[route].title = label;
+      var el = document.querySelector('.nav-item[data-route="' + route + '"] .nav-label');
+      if (el) { el.textContent = label; }
+    });
+  }
+
+  function applyDesign() {
+    applyTheme();
+    applySiteInfo();
+    applyNavLabels();
+    render();
+  }
+
+  // ---- 页面渲染 ----
+  function renderEmptyState(route) {
+    var mod = MODULES[route] || MODULES[DEFAULT_ROUTE];
+
+    pageContainer.innerHTML = "";
+
+    var wrap = document.createElement("div");
+    wrap.className = "empty-state";
+
+    var icon = document.createElement("div");
+    icon.className = "empty-icon";
+    icon.textContent = "▢";
+
+    var title = document.createElement("h2");
+    title.className = "empty-title";
+    title.textContent = mod.title;
+
+    var desc = document.createElement("p");
+    desc.className = "empty-desc";
+    desc.textContent = "此模块页面框架已就位，内容尚未填充。";
+
+    var grid = document.createElement("div");
+    grid.className = "empty-placeholder-grid";
+
+    mod.blocks.forEach(function (label) {
+      var card = document.createElement("div");
+      card.className = "placeholder-card";
+      card.textContent = label;
+      grid.appendChild(card);
+    });
+
+    wrap.appendChild(icon);
+    wrap.appendChild(title);
+    wrap.appendChild(desc);
+    wrap.appendChild(grid);
+    pageContainer.appendChild(wrap);
+
+    breadcrumb.textContent = mod.title;
+    document.title = mod.title + " · " + config.siteName;
+  }
+
+  function setActiveNav(route) {
+    navItems.forEach(function (item) {
+      item.classList.toggle("active", item.dataset.route === route);
+    });
+  }
+
+  function currentRoute() {
+    var hash = window.location.hash || "";
+    var route = hash.replace(/^#\/?/, "").split("?")[0];
+    return MODULES[route] ? route : DEFAULT_ROUTE;
+  }
+
+  function render() {
+    var route = currentRoute();
+    setActiveNav(route);
+    renderEmptyState(route);
+  }
+
+  // ---- 界面设计器 ----
+  function buildDesignerUI() {
+    // 导航名称输入
+    designNavList.innerHTML = "";
+    Object.keys(MODULES).forEach(function (route) {
+      var label = document.createElement("label");
+      label.className = "design-field";
+
+      var span = document.createElement("span");
+      span.textContent = MODULES[route].icon + " " + config.navLabels[route];
+
+      var input = document.createElement("input");
+      input.type = "text";
+      input.dataset.route = route;
+      input.value = config.navLabels[route] || "";
+
+      input.addEventListener("input", function () {
+        config.navLabels[route] = input.value || DESIGN_DEFAULTS.navLabels[route];
+        applyNavLabels();
+        render();
+      });
+
+      label.appendChild(span);
+      label.appendChild(input);
+      designNavList.appendChild(label);
+    });
+
+    // 预设色块
+    colorSwatches.innerHTML = "";
+    PRESET_COLORS.forEach(function (c) {
+      var sw = document.createElement("button");
+      sw.type = "button";
+      sw.className = "color-swatch" + (c === config.primaryColor ? " active" : "");
+      sw.style.background = c;
+      sw.title = c;
+      sw.addEventListener("click", function () {
+        config.primaryColor = c;
+        designCustomColor.value = c;
+        applyPrimary(c);
+        refreshSwatches();
+      });
+      colorSwatches.appendChild(sw);
+    });
+
+    // 主题按钮初始态
+    refreshThemeOptions();
+  }
+
+  function refreshSwatches() {
+    Array.prototype.slice.call(colorSwatches.querySelectorAll(".color-swatch")).forEach(function (sw) {
+      sw.classList.toggle("active", sw.style.background.toLowerCase() === config.primaryColor.toLowerCase());
+    });
+  }
+
+  function refreshThemeOptions() {
+    Array.prototype.slice.call(document.querySelectorAll(".theme-option")).forEach(function (btn) {
+      btn.classList.toggle("active", btn.dataset.themeChoice === config.theme);
+    });
+  }
+
+  function fillDesignerInputs() {
+    designSiteName.value = config.siteName;
+    designLogoMark.value = config.logoMark;
+    designCustomColor.value = config.primaryColor;
+    refreshSwatches();
+    refreshThemeOptions();
+  }
+
+  function openDesigner() {
+    fillDesignerInputs();
+    designPanel.classList.add("open");
+    designOverlay.classList.add("show");
+  }
+
+  function closeDesigner() {
+    designPanel.classList.remove("open");
+    designOverlay.classList.remove("show");
+  }
+
+  // 实时预览：站点标题 / Logo / 自定义颜色 / 主题
+  designSiteName.addEventListener("input", function () {
+    config.siteName = designSiteName.value || DESIGN_DEFAULTS.siteName;
+    applySiteInfo();
+    render();
+  });
+
+  designLogoMark.addEventListener("input", function () {
+    config.logoMark = designLogoMark.value || DESIGN_DEFAULTS.logoMark;
+    applySiteInfo();
+  });
+
+  designCustomColor.addEventListener("input", function () {
+    config.primaryColor = designCustomColor.value;
+    applyPrimary(config.primaryColor);
+    refreshSwatches();
+  });
+
+  Array.prototype.slice.call(document.querySelectorAll(".theme-option")).forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      config.theme = btn.dataset.themeChoice;
+      applyTheme();
+      refreshThemeOptions();
+    });
+  });
+
+  designToggle.addEventListener("click", openDesigner);
+  designClose.addEventListener("click", closeDesigner);
+  designOverlay.addEventListener("click", closeDesigner);
+
+  designSave.addEventListener("click", function () {
+    saveConfig();
+    closeDesigner();
+    toast("已保存设计");
+  });
+
+  designReset.addEventListener("click", function () {
+    if (!window.confirm("确定恢复默认设计？当前自定义内容将丢失。")) { return; }
+    config = JSON.parse(JSON.stringify(DESIGN_DEFAULTS));
+    localStorage.removeItem(STORAGE_KEY);
+    buildDesignerUI();
+    fillDesignerInputs();
+    applyDesign();
+    toast("已恢复默认");
+  });
+
+  function toast(msg) {
+    var t = document.createElement("div");
+    t.className = "toast";
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(function () { t.classList.add("show"); }, 10);
+    setTimeout(function () {
+      t.classList.remove("show");
+      setTimeout(function () { t.remove(); }, 300);
+    }, 1600);
+  }
+
+  // ---- 路由 & 侧边栏折叠 ----
+  window.addEventListener("hashchange", render);
+  menuToggle.addEventListener("click", function () {
+    sidebar.classList.toggle("collapsed");
+  });
+
+  // ---- 初始化 ----
+  buildDesignerUI();
+  applyDesign();
+
+  if (!window.location.hash) {
+    window.location.hash = "#/" + DEFAULT_ROUTE;
+  }
+})();
+
+</script>
+</body>
+</html>

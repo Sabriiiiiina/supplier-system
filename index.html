@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>供应商管理系统</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- 侧边栏 -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-mark" id="logo-mark">供</div>
+        <span class="logo-text" id="logo-text">供应商管理系统</span>
+      </div>
+      <nav class="sidebar-nav" id="sidebarNav">
+        <a class="nav-item active" href="#/dashboard" data-route="dashboard">
+          <span class="nav-icon">▦</span><span class="nav-label">工作台</span>
+        </a>
+        <a class="nav-item" href="#/suppliers" data-route="suppliers">
+          <span class="nav-icon">▤</span><span class="nav-label">供应商管理</span>
+        </a>
+        <a class="nav-item" href="#/approval" data-route="approval">
+          <span class="nav-icon">✓</span><span class="nav-label">准入审批</span>
+        </a>
+        <a class="nav-item" href="#/performance" data-route="performance">
+          <span class="nav-icon">◔</span><span class="nav-label">绩效评估</span>
+        </a>
+        <a class="nav-item" href="#/contracts" data-route="contracts">
+          <span class="nav-icon">▣</span><span class="nav-label">合同管理</span>
+        </a>
+        <a class="nav-item" href="#/settings" data-route="settings">
+          <span class="nav-icon">⚙</span><span class="nav-label">系统设置</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <span class="version-tag">v0.1 · 骨架版</span>
+      </div>
+    </aside>
+
+    <!-- 主区域 -->
+    <div class="main">
+      <!-- 顶栏 -->
+      <header class="topbar">
+        <button class="icon-btn" id="menuToggle" title="收起/展开菜单">☰</button>
+        <div class="breadcrumb" id="breadcrumb">工作台</div>
+        <div class="topbar-right">
+          <button class="icon-btn" id="designToggle" title="界面设计器">🎨</button>
+          <input type="search" class="global-search" id="globalSearch" placeholder="全局搜索（待接入）" disabled />
+          <button class="icon-btn" title="通知（待接入）">🔔</button>
+          <div class="user-chip">
+            <div class="avatar">U</div>
+            <span>未登录</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- 页面内容容器（由路由渲染，当前仅空状态占位） -->
+      <main class="content" id="pageContainer"></main>
+    </div>
+  </div>
+
+  <!-- 空状态模板 -->
+  <template id="emptyStateTpl">
+    <div class="empty-state">
+      <div class="empty-icon">▢</div>
+      <h2 class="empty-title"></h2>
+      <p class="empty-desc">此模块暂未填充内容，仅搭建页面框架。</p>
+      <div class="empty-placeholder-grid"></div>
+    </div>
+  </template>
+
+  <!-- 界面设计器：遮罩 + 右侧抽屉 -->
+  <div class="design-overlay" id="designOverlay"></div>
+  <aside class="design-panel" id="designPanel">
+    <div class="design-panel-head">
+      <div class="design-panel-title">🎨 界面设计器</div>
+      <button class="icon-btn" id="designClose" title="关闭">✕</button>
+    </div>
+    <div class="design-panel-body">
+      <section class="design-section">
+        <h3 class="design-section-title">站点信息</h3>
+        <label class="design-field">
+          <span>站点标题</span>
+          <input type="text" id="designSiteName" />
+        </label>
+        <label class="design-field">
+          <span>Logo 标识（1–2 个字）</span>
+          <input type="text" id="designLogoMark" maxlength="2" />
+        </label>
+      </section>
+
+      <section class="design-section">
+        <h3 class="design-section-title">左侧导航名称</h3>
+        <div id="designNavList"></div>
+      </section>
+
+      <section class="design-section">
+        <h3 class="design-section-title">主色调</h3>
+        <div class="color-swatches" id="colorSwatches"></div>
+        <label class="design-field">
+          <span>自定义颜色</span>
+          <input type="color" id="designCustomColor" />
+        </label>
+      </section>
+
+      <section class="design-section">
+        <h3 class="design-section-title">外观主题</h3>
+        <div class="theme-toggle">
+          <button type="button" class="theme-option" data-theme-choice="light">☀️ 浅色</button>
+          <button type="button" class="theme-option" data-theme-choice="dark">🌙 深色</button>
+        </div>
+      </section>
+    </div>
+    <div class="design-panel-foot">
+      <button class="btn btn-ghost" id="designReset">恢复默认</button>
+      <button class="btn btn-primary" id="designSave">保存设计</button>
+    </div>
+  </aside>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
