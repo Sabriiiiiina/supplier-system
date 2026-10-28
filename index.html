@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-  <div class="app">
+  <div class="app" id="appShell">
     <!-- 侧边栏 -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-logo">
@@ -15,63 +15,62 @@
         <span class="logo-text" id="logo-text">供应商管理系统</span>
       </div>
       <nav class="sidebar-nav" id="sidebarNav">
-        <a class="nav-item active" href="#/dashboard" data-route="dashboard">
+        <a class="nav-item" href="#/dashboard" data-route="dashboard">
           <span class="nav-icon">▦</span><span class="nav-label">工作台</span>
         </a>
         <a class="nav-item" href="#/suppliers" data-route="suppliers">
-          <span class="nav-icon">▤</span><span class="nav-label">供应商管理</span>
+          <span class="nav-icon">▤</span><span class="nav-label">供应商库</span>
         </a>
-        <a class="nav-item" href="#/approval" data-route="approval">
-          <span class="nav-icon">✓</span><span class="nav-label">准入审批</span>
-        </a>
-        <a class="nav-item" href="#/performance" data-route="performance">
-          <span class="nav-icon">◔</span><span class="nav-label">绩效评估</span>
+        <a class="nav-item" href="#/dispatch" data-route="dispatch">
+          <span class="nav-icon">⇅</span><span class="nav-label">发包管理</span>
         </a>
         <a class="nav-item" href="#/contracts" data-route="contracts">
           <span class="nav-icon">▣</span><span class="nav-label">合同管理</span>
+        </a>
+        <a class="nav-item" href="#/settlement" data-route="settlement">
+          <span class="nav-icon">¥</span><span class="nav-label">结算</span>
+        </a>
+        <a class="nav-item" href="#/analytics" data-route="analytics">
+          <span class="nav-icon">◔</span><span class="nav-label">数据分析</span>
         </a>
         <a class="nav-item" href="#/settings" data-route="settings">
           <span class="nav-icon">⚙</span><span class="nav-label">系统设置</span>
         </a>
       </nav>
       <div class="sidebar-footer">
-        <span class="version-tag">v0.1 · 骨架版</span>
+        <span class="version-tag" id="versionTag">v1.0 · 供应商管理</span>
       </div>
     </aside>
 
     <!-- 主区域 -->
-    <div class="main">
-      <!-- 顶栏 -->
+    <div class="main" id="mainArea">
       <header class="topbar">
         <button class="icon-btn" id="menuToggle" title="收起/展开菜单">☰</button>
         <div class="breadcrumb" id="breadcrumb">工作台</div>
+        <div class="global-search-wrap" id="globalSearchWrap">
+          <input type="search" class="global-search" id="globalSearch" placeholder="全局搜索：需求 / 供应商 / 项目…" autocomplete="off" />
+          <div class="search-results" id="searchResults"></div>
+        </div>
         <div class="topbar-right">
+          <label class="user-label">当前身份</label>
+          <select class="user-select" id="currentUserSelect" title="切换当前身份（用于权限模拟）"></select>
           <button class="icon-btn" id="designToggle" title="界面设计器">🎨</button>
-          <input type="search" class="global-search" id="globalSearch" placeholder="全局搜索（待接入）" disabled />
-          <button class="icon-btn" title="通知（待接入）">🔔</button>
-          <div class="user-chip">
-            <div class="avatar">U</div>
-            <span>未登录</span>
-          </div>
         </div>
       </header>
-
-      <!-- 页面内容容器（由路由渲染，当前仅空状态占位） -->
       <main class="content" id="pageContainer"></main>
     </div>
   </div>
 
-  <!-- 空状态模板 -->
-  <template id="emptyStateTpl">
-    <div class="empty-state">
-      <div class="empty-icon">▢</div>
-      <h2 class="empty-title"></h2>
-      <p class="empty-desc">此模块暂未填充内容，仅搭建页面框架。</p>
-      <div class="empty-placeholder-grid"></div>
-    </div>
-  </template>
+  <!-- 供应商自助入库页（独立页面，仅显示入库表单） -->
+  <div class="onboard-page" id="onboardPage" hidden>
+    <div class="onboard-box" id="onboardBox"></div>
+  </div>
 
-  <!-- 界面设计器：遮罩 + 右侧抽屉 -->
+  <!-- 通用弹窗 -->
+  <div class="modal-overlay" id="modalOverlay"></div>
+  <div class="modal" id="modal" role="dialog"></div>
+
+  <!-- 界面设计器 -->
   <div class="design-overlay" id="designOverlay"></div>
   <aside class="design-panel" id="designPanel">
     <div class="design-panel-head">
@@ -90,12 +89,6 @@
           <input type="text" id="designLogoMark" maxlength="2" />
         </label>
       </section>
-
-      <section class="design-section">
-        <h3 class="design-section-title">左侧导航名称</h3>
-        <div id="designNavList"></div>
-      </section>
-
       <section class="design-section">
         <h3 class="design-section-title">主色调</h3>
         <div class="color-swatches" id="colorSwatches"></div>
@@ -104,7 +97,6 @@
           <input type="color" id="designCustomColor" />
         </label>
       </section>
-
       <section class="design-section">
         <h3 class="design-section-title">外观主题</h3>
         <div class="theme-toggle">

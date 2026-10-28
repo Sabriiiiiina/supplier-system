@@ -1,355 +1,1679 @@
-/* ========== 供应商管理系统 · 路由渲染 + 界面设计器 ========== */
+/* ========== 供应商管理系统 · 完整业务逻辑 ========== */
 (function () {
   "use strict";
 
-  // ---- 模块定义：名称 + 图标 + 空占位区块（不含业务数据）----
-  var MODULES = {
-    dashboard: {
-      title: "工作台", icon: "▦",
-      blocks: ["数据概览（待接入）", "待办事项（待接入）", "快捷入口（待接入）"]
-    },
-    suppliers: {
-      title: "供应商管理", icon: "▤",
-      blocks: ["供应商列表（待接入）", "筛选与搜索（待接入）", "新增/编辑表单（待接入）"]
-    },
-    approval: {
-      title: "准入审批", icon: "✓",
-      blocks: ["审批流程配置（待接入）", "待审批列表（待接入）", "审批记录（待接入）"]
-    },
-    performance: {
-      title: "绩效评估", icon: "◔",
-      blocks: ["评估指标（待接入）", "评分看板（待接入）", "评估周期（待接入）"]
-    },
-    contracts: {
-      title: "合同管理", icon: "▣",
-      blocks: ["合同台账（待接入）", "到期提醒（待接入）", "附件管理（待接入）"]
-    },
-    settings: {
-      title: "系统设置", icon: "⚙",
-      blocks: ["组织架构（待接入）", "角色权限（待接入）", "字段与字典配置（待接入）"]
-    }
-  };
+  /* ================= 工具函数 ================= */
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function uid() { return "id" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function fmtNum(n) {
+    n = Number(n) || 0;
+    return n.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
+  }
+  function money(n, cur) { return (cur === "USD" ? "$" : "¥") + fmtNum(n); }
+  function starStr(n) {
+    n = Math.max(0, Math.min(5, Math.round(Number(n) || 0)));
+    return "★★★★★".slice(0, n) + "☆☆☆☆☆".slice(0, 5 - n);
+  }
+  function toast(msg) {
+    var t = el("div", "toast", msg);
+    document.body.appendChild(t);
+    setTimeout(function () { t.classList.add("show"); }, 10);
+    setTimeout(function () { t.classList.remove("show"); setTimeout(function () { t.remove(); }, 300); }, 1800);
+  }
+  function copyText(txt, cb) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(function () { cb && cb(); }, function () { fallbackCopy(txt, cb); });
+    } else { fallbackCopy(txt, cb); }
+  }
+  function fallbackCopy(txt, cb) {
+    var ta = el("textarea");
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (e) {}
+    ta.remove(); cb && cb();
+  }
+  function readFiles(input, cb) {
+    var files = Array.prototype.slice.call(input.files || []);
+    var out = [], done = 0;
+    if (!files.length) { cb([]); return; }
+    files.forEach(function (f) {
+      if (f.size > 2 * 1024 * 1024) { toast("文件「" + f.name + "」超过 2MB，已跳过"); done++; if (done === files.length) cb(out); return; }
+      var r = new FileReader();
+      r.onload = function () { out.push({ name: f.name, size: f.size, type: f.type, dataUrl: r.result }); done++; if (done === files.length) cb(out); };
+      r.onerror = function () { done++; if (done === files.length) cb(out); };
+      r.readAsDataURL(f);
+    });
+  }
 
-  var DEFAULT_ROUTE = "dashboard";
-  var STORAGE_KEY = "supplier-system-design-v1";
+  /* ================= 常量与默认配置 ================= */
+  var PRESET_COLORS = ["#2f6bff", "#00b4a0", "#7c5cff", "#22a06b", "#ff7a2f", "#e5484d"];
+  var CHART_COLORS = ["#2f6bff", "#00b4a0", "#7c5cff", "#22a06b", "#ff7a2f", "#e5484d", "#00a0d2", "#d2622f", "#8a9bff", "#2fbf8f"];
 
-  // ---- 设计配置默认值 ----
-  var DESIGN_DEFAULTS = {
+  var DEFAULT_CONFIG = {
     siteName: "供应商管理系统",
     logoMark: "供",
     primaryColor: "#2f6bff",
     theme: "light",
-    navLabels: {
-      dashboard: "工作台",
-      suppliers: "供应商管理",
-      approval: "准入审批",
-      performance: "绩效评估",
-      contracts: "合同管理",
-      settings: "系统设置"
-    }
+    projects: ["MC", "Nova", "MF", "C", "S", "K"],
+    supplierCategories: ["美术", "素材", "音频", "外派", "本地化"],
+    demandCategories: ["角色原画", "场景原画", "角色动画", "场景动画", "角色模型", "场景模型", "图标", "UI"],
+    members: ["何捷", "于涛", "黄志鹏", "徐峰", "徐芝芝", "陈宇飞", "王薪清"],
+    projectGroups: {}, // { 项目: [成员名, ...] }
+    currentUser: "管理员"
   };
 
-  var PRESET_COLORS = ["#2f6bff", "#00b4a0", "#7c5cff", "#22a06b", "#ff7a2f", "#e5484d"];
+  var KEYS = {
+    config: "spm_config_v1",
+    suppliers: "spm_suppliers_v1",
+    demands: "spm_demands_v1",
+    contracts: "spm_contracts_v1",
+    widgets: "spm_widgets_v1"
+  };
 
-  // ---- DOM 引用 ----
-  var pageContainer = document.getElementById("pageContainer");
-  var breadcrumb = document.getElementById("breadcrumb");
-  var sidebar = document.getElementById("sidebar");
-  var menuToggle = document.getElementById("menuToggle");
-  var navItems = Array.prototype.slice.call(document.querySelectorAll(".nav-item"));
-
-  var designToggle = document.getElementById("designToggle");
-  var designPanel = document.getElementById("designPanel");
-  var designOverlay = document.getElementById("designOverlay");
-  var designClose = document.getElementById("designClose");
-  var designSiteName = document.getElementById("designSiteName");
-  var designLogoMark = document.getElementById("designLogoMark");
-  var designNavList = document.getElementById("designNavList");
-  var colorSwatches = document.getElementById("colorSwatches");
-  var designCustomColor = document.getElementById("designCustomColor");
-  var designReset = document.getElementById("designReset");
-  var designSave = document.getElementById("designSave");
-
-  // ---- 配置读写 ----
-  function loadConfig() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        var saved = JSON.parse(raw);
-        var merged = {};
-        var k, r;
-        for (k in DESIGN_DEFAULTS) { merged[k] = DESIGN_DEFAULTS[k]; }
-        for (k in saved) { merged[k] = saved[k]; }
-        if (!merged.navLabels) { merged.navLabels = {}; }
-        for (r in DESIGN_DEFAULTS.navLabels) {
-          if (!merged.navLabels[r]) { merged.navLabels[r] = DESIGN_DEFAULTS.navLabels[r]; }
-        }
-        return merged;
-      }
-    } catch (e) { /* 忽略损坏数据 */ }
-    return JSON.parse(JSON.stringify(DESIGN_DEFAULTS));
+  /* ================= 数据层 ================= */
+  function load(key, def) {
+    try { var r = localStorage.getItem(key); if (r) return JSON.parse(r); } catch (e) {}
+    return def;
+  }
+  function save(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); }
+    catch (e) { toast("保存失败：本地存储空间不足（附件过多）"); }
   }
 
-  var config = loadConfig();
+  var config = load(KEYS.config, {});
+  (function mergeConfig() {
+    var d = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+    for (var k in d) { if (config[k] === undefined) config[k] = d[k]; }
+  })();
 
-  function saveConfig() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(config)); } catch (e) {}
+  var suppliers = load(KEYS.suppliers, []);
+  var demands = load(KEYS.demands, []);
+  var contracts = load(KEYS.contracts, []);
+  var widgets = load(KEYS.widgets, null);
+
+  // 数据迁移：为历史需求单补全 settlement 子结构
+  demands.forEach(function (d) {
+    if (!d.settlement) d.settlement = { completion: 0, settleFiles: [], invoiceFiles: [], confirmed: false };
+    if (!d.attr) d.attr = "正式需求";
+    if (!d.status) d.status = "未开始";
+    if (d.quoteCurrency === undefined) d.quoteCurrency = "RMB";
+  });
+
+  function saveConfig() { save(KEYS.config, config); }
+  function saveSuppliers() { save(KEYS.suppliers, suppliers); }
+  function saveDemands() { save(KEYS.demands, demands); }
+  function saveContracts() { save(KEYS.contracts, contracts); }
+  function saveWidgets() { save(KEYS.widgets, widgets); }
+
+  /* ================= 领域辅助 ================= */
+  function supplierById(id) {
+    for (var i = 0; i < suppliers.length; i++) if (suppliers[i].id === id) return suppliers[i];
+    return null;
+  }
+  function supplierName(id) { var s = supplierById(id); return s ? s.name : "（已删除）"; }
+  function supplierCat(id) { var s = supplierById(id); return s ? s.category : ""; }
+
+  function computeCoopStatus(s) {
+    if (s.statusOverride) return s.statusOverride;
+    var ds = demands.filter(function (d) { return d.supplierId === s.id; });
+    if (!ds.length) return "未合作";
+    if (ds.some(function (d) { return d.testResult === "测试未通过"; })) return "终止合作";
+    var today = todayStr();
+    var ongoing = ds.some(function (d) {
+      if (d.status === "已完成") return false;
+      if (d.dispatchDate && d.ddl) return d.dispatchDate <= today && d.ddl >= today;
+      return d.status !== "已完成";
+    });
+    if (ongoing) return "合作中";
+    return "静态";
   }
 
+  function isAdmin() { return config.currentUser === "管理员" || !config.currentUser; }
+  function myProjects() {
+    if (isAdmin()) return config.projects.slice();
+    var gs = config.projectGroups || {};
+    return config.projects.filter(function (p) { return (gs[p] || []).indexOf(config.currentUser) >= 0; });
+  }
+  function visibleDemands() {
+    if (isAdmin()) return demands.slice();
+    var mp = myProjects();
+    return demands.filter(function (d) { return mp.indexOf(d.project) >= 0; });
+  }
+
+  function coopBadge(st) {
+    var map = { "未合作": "gray", "合作中": "green", "静态": "blue", "终止合作": "red" };
+    return '<span class="badge ' + (map[st] || "gray") + '">' + esc(st) + "</span>";
+  }
+  function statusBadge(st) {
+    var map = { "未开始": "gray", "进行中": "blue", "已完成": "green", "延期": "orange" };
+    return '<span class="badge ' + (map[st] || "gray") + '">' + esc(st) + "</span>";
+  }
+  function attrBadge(attr) {
+    return '<span class="badge ' + (attr === "测试需求" ? "orange" : "blue") + '">' + esc(attr) + "</span>";
+  }
+
+  function actualSettle(d) {
+    return (Number(d.quoteAmount) || 0) * ((Number(d.settlement.completion) || 0) / 100);
+  }
+
+  /* ================= 主题与设计器 ================= */
   function hexToRgb(hex) {
     var h = hex.replace("#", "");
-    if (h.length === 3) { h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2]; }
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
     var n = parseInt(h, 16);
     return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
   }
-
   function applyPrimary(hex) {
     var rgb = hexToRgb(hex);
     document.documentElement.style.setProperty("--primary", hex);
     if (config.theme === "dark") {
-      document.documentElement.style.setProperty(
-        "--primary-soft", "rgba(" + rgb.r + "," + rgb.g + "," + rgb.b + ",0.18)");
+      document.documentElement.style.setProperty("--primary-soft", "rgba(" + rgb.r + "," + rgb.g + "," + rgb.b + ",0.18)");
     } else {
-      var r = Math.round(rgb.r + (255 - rgb.r) * 0.88);
-      var g = Math.round(rgb.g + (255 - rgb.g) * 0.88);
-      var b = Math.round(rgb.b + (255 - rgb.b) * 0.88);
+      var r = Math.round(rgb.r + (255 - rgb.r) * 0.88), g = Math.round(rgb.g + (255 - rgb.g) * 0.88), b = Math.round(rgb.b + (255 - rgb.b) * 0.88);
       document.documentElement.style.setProperty("--primary-soft", "rgb(" + r + "," + g + "," + b + ")");
     }
   }
-
-  function applyTheme() {
-    document.body.setAttribute("data-theme", config.theme);
-    applyPrimary(config.primaryColor);
-  }
-
+  function applyTheme() { document.body.setAttribute("data-theme", config.theme); applyPrimary(config.primaryColor); }
   function applySiteInfo() {
-    document.getElementById("logo-mark").textContent = config.logoMark || "供";
-    document.getElementById("logo-text").textContent = config.siteName || "供应商管理系统";
+    $("logo-mark").textContent = config.logoMark || "供";
+    $("logo-text").textContent = config.siteName || "供应商管理系统";
   }
+  function applyDesign() { applyTheme(); applySiteInfo(); }
 
-  function applyNavLabels() {
-    Object.keys(MODULES).forEach(function (route) {
-      var label = config.navLabels[route] || DESIGN_DEFAULTS.navLabels[route];
-      MODULES[route].title = label;
-      var el = document.querySelector('.nav-item[data-route="' + route + '"] .nav-label');
-      if (el) { el.textContent = label; }
-    });
-  }
-
-  function applyDesign() {
-    applyTheme();
-    applySiteInfo();
-    applyNavLabels();
-    render();
-  }
-
-  // ---- 页面渲染 ----
-  function renderEmptyState(route) {
-    var mod = MODULES[route] || MODULES[DEFAULT_ROUTE];
-
-    pageContainer.innerHTML = "";
-
-    var wrap = document.createElement("div");
-    wrap.className = "empty-state";
-
-    var icon = document.createElement("div");
-    icon.className = "empty-icon";
-    icon.textContent = "▢";
-
-    var title = document.createElement("h2");
-    title.className = "empty-title";
-    title.textContent = mod.title;
-
-    var desc = document.createElement("p");
-    desc.className = "empty-desc";
-    desc.textContent = "此模块页面框架已就位，内容尚未填充。";
-
-    var grid = document.createElement("div");
-    grid.className = "empty-placeholder-grid";
-
-    mod.blocks.forEach(function (label) {
-      var card = document.createElement("div");
-      card.className = "placeholder-card";
-      card.textContent = label;
-      grid.appendChild(card);
-    });
-
-    wrap.appendChild(icon);
-    wrap.appendChild(title);
-    wrap.appendChild(desc);
-    wrap.appendChild(grid);
-    pageContainer.appendChild(wrap);
-
-    breadcrumb.textContent = mod.title;
-    document.title = mod.title + " · " + config.siteName;
-  }
-
-  function setActiveNav(route) {
-    navItems.forEach(function (item) {
-      item.classList.toggle("active", item.dataset.route === route);
-    });
-  }
-
-  function currentRoute() {
-    var hash = window.location.hash || "";
-    var route = hash.replace(/^#\/?/, "").split("?")[0];
-    return MODULES[route] ? route : DEFAULT_ROUTE;
-  }
-
-  function render() {
-    var route = currentRoute();
-    setActiveNav(route);
-    renderEmptyState(route);
-  }
-
-  // ---- 界面设计器 ----
-  function buildDesignerUI() {
-    // 导航名称输入
-    designNavList.innerHTML = "";
-    Object.keys(MODULES).forEach(function (route) {
-      var label = document.createElement("label");
-      label.className = "design-field";
-
-      var span = document.createElement("span");
-      span.textContent = MODULES[route].icon + " " + config.navLabels[route];
-
-      var input = document.createElement("input");
-      input.type = "text";
-      input.dataset.route = route;
-      input.value = config.navLabels[route] || "";
-
-      input.addEventListener("input", function () {
-        config.navLabels[route] = input.value || DESIGN_DEFAULTS.navLabels[route];
-        applyNavLabels();
-        render();
-      });
-
-      label.appendChild(span);
-      label.appendChild(input);
-      designNavList.appendChild(label);
-    });
-
-    // 预设色块
-    colorSwatches.innerHTML = "";
-    PRESET_COLORS.forEach(function (c) {
-      var sw = document.createElement("button");
-      sw.type = "button";
-      sw.className = "color-swatch" + (c === config.primaryColor ? " active" : "");
-      sw.style.background = c;
-      sw.title = c;
-      sw.addEventListener("click", function () {
-        config.primaryColor = c;
-        designCustomColor.value = c;
-        applyPrimary(c);
-        refreshSwatches();
-      });
-      colorSwatches.appendChild(sw);
-    });
-
-    // 主题按钮初始态
-    refreshThemeOptions();
-  }
+  var designToggle = $("designToggle"), designPanel = $("designPanel"), designOverlay = $("designOverlay");
+  var designClose = $("designClose"), designSiteName = $("designSiteName"), designLogoMark = $("designLogoMark");
+  var colorSwatches = $("colorSwatches"), designCustomColor = $("designCustomColor");
+  var designReset = $("designReset"), designSave = $("designSave");
 
   function refreshSwatches() {
     Array.prototype.slice.call(colorSwatches.querySelectorAll(".color-swatch")).forEach(function (sw) {
       sw.classList.toggle("active", sw.style.background.toLowerCase() === config.primaryColor.toLowerCase());
     });
   }
-
   function refreshThemeOptions() {
-    Array.prototype.slice.call(document.querySelectorAll(".theme-option")).forEach(function (btn) {
-      btn.classList.toggle("active", btn.dataset.themeChoice === config.theme);
+    Array.prototype.slice.call(document.querySelectorAll(".theme-option")).forEach(function (b) {
+      b.classList.toggle("active", b.dataset.themeChoice === config.theme);
     });
   }
-
+  function buildDesignerUI() {
+    colorSwatches.innerHTML = "";
+    PRESET_COLORS.forEach(function (c) {
+      var sw = el("button", "color-swatch" + (c === config.primaryColor ? " active" : ""));
+      sw.type = "button"; sw.style.background = c; sw.title = c;
+      sw.addEventListener("click", function () { config.primaryColor = c; designCustomColor.value = c; applyPrimary(c); refreshSwatches(); });
+      colorSwatches.appendChild(sw);
+    });
+    refreshThemeOptions();
+  }
   function fillDesignerInputs() {
     designSiteName.value = config.siteName;
     designLogoMark.value = config.logoMark;
     designCustomColor.value = config.primaryColor;
-    refreshSwatches();
-    refreshThemeOptions();
+    refreshSwatches(); refreshThemeOptions();
   }
-
-  function openDesigner() {
-    fillDesignerInputs();
-    designPanel.classList.add("open");
-    designOverlay.classList.add("show");
-  }
-
-  function closeDesigner() {
-    designPanel.classList.remove("open");
-    designOverlay.classList.remove("show");
-  }
-
-  // 实时预览：站点标题 / Logo / 自定义颜色 / 主题
-  designSiteName.addEventListener("input", function () {
-    config.siteName = designSiteName.value || DESIGN_DEFAULTS.siteName;
-    applySiteInfo();
-    render();
-  });
-
-  designLogoMark.addEventListener("input", function () {
-    config.logoMark = designLogoMark.value || DESIGN_DEFAULTS.logoMark;
-    applySiteInfo();
-  });
-
-  designCustomColor.addEventListener("input", function () {
-    config.primaryColor = designCustomColor.value;
-    applyPrimary(config.primaryColor);
-    refreshSwatches();
-  });
-
-  Array.prototype.slice.call(document.querySelectorAll(".theme-option")).forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      config.theme = btn.dataset.themeChoice;
-      applyTheme();
-      refreshThemeOptions();
-    });
-  });
+  function openDesigner() { fillDesignerInputs(); designPanel.classList.add("open"); designOverlay.classList.add("show"); }
+  function closeDesigner() { designPanel.classList.remove("open"); designOverlay.classList.remove("show"); }
 
   designToggle.addEventListener("click", openDesigner);
   designClose.addEventListener("click", closeDesigner);
   designOverlay.addEventListener("click", closeDesigner);
-
-  designSave.addEventListener("click", function () {
-    saveConfig();
-    closeDesigner();
-    toast("已保存设计");
+  designSiteName.addEventListener("input", function () {
+    config.siteName = designSiteName.value || DEFAULT_CONFIG.siteName; applySiteInfo(); document.title = currentTitle();
   });
-
+  designLogoMark.addEventListener("input", function () { config.logoMark = designLogoMark.value || "供"; applySiteInfo(); });
+  designCustomColor.addEventListener("input", function () { config.primaryColor = designCustomColor.value; applyPrimary(config.primaryColor); refreshSwatches(); });
+  Array.prototype.slice.call(document.querySelectorAll(".theme-option")).forEach(function (b) {
+    b.addEventListener("click", function () { config.theme = b.dataset.themeChoice; applyTheme(); refreshThemeOptions(); });
+  });
+  designSave.addEventListener("click", function () { saveConfig(); closeDesigner(); toast("已保存设计"); });
   designReset.addEventListener("click", function () {
-    if (!window.confirm("确定恢复默认设计？当前自定义内容将丢失。")) { return; }
-    config = JSON.parse(JSON.stringify(DESIGN_DEFAULTS));
-    localStorage.removeItem(STORAGE_KEY);
-    buildDesignerUI();
-    fillDesignerInputs();
-    applyDesign();
-    toast("已恢复默认");
+    if (!window.confirm("确定恢复默认设计？当前自定义内容将丢失。")) return;
+    var keep = { siteName: DEFAULT_CONFIG.siteName, logoMark: DEFAULT_CONFIG.logoMark, primaryColor: DEFAULT_CONFIG.primaryColor, theme: "light" };
+    for (var k in keep) config[k] = keep[k];
+    saveConfig(); buildDesignerUI(); fillDesignerInputs(); applyDesign(); toast("已恢复默认");
   });
 
-  function toast(msg) {
-    var t = document.createElement("div");
-    t.className = "toast";
-    t.textContent = msg;
-    document.body.appendChild(t);
-    setTimeout(function () { t.classList.add("show"); }, 10);
-    setTimeout(function () {
-      t.classList.remove("show");
-      setTimeout(function () { t.remove(); }, 300);
-    }, 1600);
+  /* ================= 弹窗 ================= */
+  function openModal(title, bodyNode, footNode, small) {
+    var m = $("modal");
+    m.innerHTML = "";
+    m.classList.toggle("sm", !!small);
+    var head = el("div", "modal-head");
+    head.appendChild(el("div", "modal-title", title));
+    var cb = el("button", "icon-btn modal-close", "✕"); cb.title = "关闭"; cb.addEventListener("click", closeModal);
+    head.appendChild(cb);
+    var body = el("div", "modal-body"); body.appendChild(bodyNode);
+    var foot = el("div", "modal-foot");
+    if (footNode) foot.appendChild(footNode);
+    m.appendChild(head); m.appendChild(body); m.appendChild(foot);
+    $("modalOverlay").classList.add("show"); m.classList.add("open");
+  }
+  function closeModal() { $("modalOverlay").classList.remove("show"); $("modal").classList.remove("open"); }
+  $("modalOverlay").addEventListener("click", closeModal);
+
+  /* ================= 表单构建助手 ================= */
+  function fieldRow(labelText, control, required, full) {
+    var f = el("div", "form-field" + (full ? " full" : ""));
+    var lab = el("label");
+    lab.textContent = labelText;
+    if (required) { var r = el("span", "req", "*"); lab.appendChild(r); }
+    f.appendChild(lab);
+    f.appendChild(control);
+    return f;
+  }
+  function makeInput(type, key, val, ph) {
+    var inp = el("input");
+    inp.type = type; inp.setAttribute("data-key", key);
+    if (val != null) inp.value = val;
+    if (ph) inp.placeholder = ph;
+    return inp;
+  }
+  function makeSelect(key, options, val, placeholder) {
+    var s = el("select"); s.setAttribute("data-key", key);
+    if (placeholder != null) { var o = el("option", "", placeholder); o.value = ""; s.appendChild(o); }
+    options.forEach(function (opt) {
+      var v = typeof opt === "string" ? opt : opt.value;
+      var t = typeof opt === "string" ? opt : opt.label;
+      var o = el("option", "", t); o.value = v; s.appendChild(o);
+    });
+    s.value = (val == null || val === "") ? "" : val;
+    return s;
+  }
+  function makeRadio(name, options, val) {
+    var wrap = el("div", "radio-row");
+    options.forEach(function (opt) {
+      var v = typeof opt === "string" ? opt : opt.value;
+      var t = typeof opt === "string" ? opt : opt.label;
+      var lab = el("label");
+      var inp = el("input"); inp.type = "radio"; inp.name = name; inp.value = v;
+      inp.setAttribute("data-key", name);
+      if (v === val) inp.checked = true;
+      lab.appendChild(inp); lab.appendChild(document.createTextNode(" " + t));
+      wrap.appendChild(lab);
+    });
+    return wrap;
+  }
+  function makeCheckboxGroup(options, selected, groupName) {
+    var wrap = el("div", "checkbox-grid");
+    options.forEach(function (opt) {
+      var v = typeof opt === "string" ? opt : opt.value;
+      var t = typeof opt === "string" ? opt : opt.label;
+      var lab = el("label", "check-item");
+      var inp = el("input"); inp.type = "checkbox"; inp.value = v;
+      if (groupName) inp.name = groupName;
+      if ((selected || []).indexOf(v) >= 0) { inp.checked = true; lab.classList.add("on"); }
+      lab.appendChild(inp); lab.appendChild(document.createTextNode(t));
+      lab.addEventListener("click", function () { inp.checked = !inp.checked; lab.classList.toggle("on", inp.checked); });
+      wrap.appendChild(lab);
+    });
+    return wrap;
+  }
+  function getRadio(root, name) {
+    var checked = root.querySelector('input[type="radio"][name="' + name + '"]:checked');
+    return checked ? checked.value : "";
+  }
+  function getGroupValues(root, groupName) {
+    return Array.prototype.slice.call(root.querySelectorAll('input[type="checkbox"][name="' + groupName + '"]:checked')).map(function (c) { return c.value; });
+  }
+  function fileField(filesArr, onChange) {
+    var wrap = el("div");
+    function draw() {
+      wrap.innerHTML = "";
+      var list = el("div", "file-list");
+      (filesArr || []).forEach(function (f, i) {
+        var chip = el("div", "file-chip");
+        chip.appendChild(el("span", "fname", f.name));
+        chip.appendChild(el("span", "fsize", f.size ? (f.size / 1024).toFixed(0) + "KB" : ""));
+        var dl = el("a"); dl.textContent = "下载"; dl.href = f.dataUrl; dl.download = f.name; dl.target = "_blank";
+        var rm = el("a"); rm.textContent = "移除"; rm.style.cursor = "pointer";
+        rm.addEventListener("click", function () { filesArr.splice(i, 1); onChange(filesArr); draw(); });
+        chip.appendChild(dl); chip.appendChild(rm);
+        list.appendChild(chip);
+      });
+      var add = el("label", "file-add"); add.appendChild(document.createTextNode("📎 上传附件"));
+      var inp = el("input"); inp.type = "file"; inp.multiple = true; add.appendChild(inp);
+      inp.addEventListener("change", function () {
+        readFiles(inp, function (nf) { if (nf.length) { filesArr = filesArr.concat(nf); onChange(filesArr); draw(); } });
+      });
+      wrap.appendChild(list); wrap.appendChild(add);
+      wrap.appendChild(el("div", "file-hint", "图片/文档均可，单个不超过 2MB，保存在本浏览器"));
+    }
+    draw();
+    return wrap;
+  }
+  function starWidget(val, onChange) {
+    var wrap = el("div", "stars");
+    var cur = Number(val) || 0;
+    function draw() {
+      wrap.innerHTML = "";
+      for (var i = 1; i <= 5; i++) {
+        (function (n) {
+          var s = el("span", "star" + (n <= cur ? " on" : ""), "★");
+          s.addEventListener("click", function () { cur = n; onChange(cur); draw(); });
+          wrap.appendChild(s);
+        })(i);
+      }
+    }
+    draw();
+    return wrap;
   }
 
-  // ---- 路由 & 侧边栏折叠 ----
-  window.addEventListener("hashchange", render);
-  menuToggle.addEventListener("click", function () {
-    sidebar.classList.toggle("collapsed");
+  /* ================= 供应商表单 ================= */
+  function supplierForm(initial, isSelfService) {
+    initial = initial || {};
+    var grid = el("div", "form-grid");
+    grid.appendChild(fieldRow("供应商名称", makeInput("text", "name", initial.name, "必填，且不可与现有供应商重名"), true, true));
+    grid.appendChild(fieldRow("供应商分类", makeSelect("category", config.supplierCategories, initial.category, "请选择分类"), true));
+    grid.appendChild(fieldRow("类型", makeRadio("type", ["公司", "个人"], initial.type || "公司")));
+    grid.appendChild(fieldRow("规模", makeInput("text", "scale", initial.scale, "如：1-10人 / 50人")));
+
+    var specField = fieldRow("擅长领域", makeCheckboxGroup(config.demandCategories, initial.specialty || [], "sp_specialty"), false, true);
+    grid.appendChild(specField);
+
+    grid.appendChild(fieldRow("合作项目", makeCheckboxGroup(config.projects, initial.projects || [], "sp_projects"), false, true));
+
+    var introFiles = (initial.introFiles || []).slice();
+    var introField = fieldRow("公司介绍资料", fileField(introFiles, function (f) { introFiles = f; }), false, true);
+    grid.appendChild(introField);
+
+    grid.appendChild(fieldRow("银行账号", makeInput("text", "bankAccount", initial.bankAccount)));
+    grid.appendChild(fieldRow("开户行", makeInput("text", "bankName", initial.bankName)));
+    grid.appendChild(fieldRow("收款方", makeInput("text", "payee", initial.payee)));
+
+    var licFiles = (initial.licenseFiles || []).slice();
+    var licField = fieldRow("营业执照", fileField(licFiles, function (f) { licFiles = f; }), false, true);
+    grid.appendChild(licField);
+
+    if (!isSelfService) {
+      var autoSt = initial.id ? computeCoopStatus(supplierById(initial.id) || initial) : "未合作";
+      var ovSel = makeSelect("statusOverride", ["", "未合作", "合作中", "静态", "终止合作"], initial.statusOverride || "", "自动判断");
+      var stRow = fieldRow("合作状态（自动判断结果： " + autoSt + "，可手动覆盖）", ovSel, false, true);
+      grid.appendChild(stRow);
+    }
+
+    function collect() {
+      var name = grid.querySelector('[data-key="name"]').value.trim();
+      var out = {
+        name: name,
+        category: grid.querySelector('[data-key="category"]').value,
+        type: getRadio(grid, "type"),
+        scale: grid.querySelector('[data-key="scale"]').value.trim(),
+        specialty: getGroupValues(grid, "sp_specialty"),
+        projects: getGroupValues(grid, "sp_projects"),
+        introFiles: introFiles,
+        bankAccount: grid.querySelector('[data-key="bankAccount"]').value.trim(),
+        bankName: grid.querySelector('[data-key="bankName"]').value.trim(),
+        payee: grid.querySelector('[data-key="payee"]').value.trim(),
+        licenseFiles: licFiles
+      };
+      if (!isSelfService) { out.statusOverride = grid.querySelector('[data-key="statusOverride"]').value || null; }
+      return out;
+    }
+    return { node: grid, collect: collect };
+  }
+
+  /* ================= 需求单表单 ================= */
+  function demandForm(d, mode) {
+    var isCreate = mode === "create";
+    var grid = el("div", "form-grid");
+    grid.appendChild(fieldRow("需求名称", makeInput("text", "name", d ? d.name : "", "必填"), true, true));
+    grid.appendChild(fieldRow("需求属性", makeRadio("attr", ["正式需求", "测试需求"], d ? d.attr : "正式需求")));
+    grid.appendChild(fieldRow("需求人", makeSelect("demander", config.members, d ? d.demander : "", "请选择需求人"), true));
+    var allowedProjects = isAdmin() ? config.projects : myProjects();
+    grid.appendChild(fieldRow("所属项目", makeSelect("project", allowedProjects, d ? d.project : "", "请选择项目"), true));
+    grid.appendChild(fieldRow("需求模块", makeSelect("module", config.demandCategories, d ? d.module : "", "请选择品类"), true));
+    grid.appendChild(fieldRow("数量", makeInput("number", "qty", d ? d.qty : "", "")));
+    grid.appendChild(fieldRow("内部工作量", makeInput("text", "workload", d ? d.workload : "", "如：5 人天"), false, true));
+
+    if (!isCreate) {
+      grid.appendChild(fieldRow("需求状态", makeSelect("status", ["未开始", "进行中", "已完成", "延期"], d.status)));
+      grid.appendChild(fieldRow("发包月份", makeInput("month", "dispatchMonth", d.dispatchMonth)));
+      grid.appendChild(fieldRow("发包时间", makeInput("date", "dispatchDate", d.dispatchDate)));
+      grid.appendChild(fieldRow("DDL", makeInput("date", "ddl", d.ddl)));
+      grid.appendChild(fieldRow("供应商", makeSelect("supplier", suppliers.map(function (s) { return { value: s.id, label: s.name }; }), d.supplierId, "请选择供应商")));
+
+      var schedFiles = (d.scheduleFiles || []).slice();
+      grid.appendChild(fieldRow("排期（附件）", fileField(schedFiles, function (f) { schedFiles = f; }), false, true));
+
+      var amountField = el("div", "form-field");
+      var amountWrap = el("div"); amountWrap.style.cssText = "display:flex;gap:8px;";
+      amountWrap.appendChild(makeInput("number", "quoteAmount", d.quoteAmount, "金额"));
+      amountWrap.appendChild(makeSelect("quoteCurrency", ["RMB", "USD"], d.quoteCurrency || "RMB"));
+      amountField.appendChild(el("label", "", "报价")); amountField.appendChild(amountWrap);
+      grid.appendChild(amountField);
+
+      grid.appendChild(fieldRow("验收时间", makeInput("date", "acceptDate", d.acceptDate)));
+      grid.appendChild(fieldRow("测试情况", makeRadio("testResult", ["测试通过", "测试未通过"], d.testResult)));
+      grid.appendChild(fieldRow("测试评价", (function () { var t = el("textarea"); t.setAttribute("data-key", "testComment"); t.value = d.testComment || ""; return t; })(), false, true));
+
+      var rv = { val: d.rating || 0 };
+      var rw = starWidget(d.rating, function (n) { rv.val = n; });
+      grid.appendChild(fieldRow("评价（星级）", rw));
+      grid.appendChild(fieldRow("评价（文字）", (function () { var t = el("textarea"); t.setAttribute("data-key", "ratingText"); t.value = d.ratingText || ""; return t; })(), false, true));
+      grid.appendChild(fieldRow("备注", (function () { var t = el("textarea"); t.setAttribute("data-key", "note"); t.value = d.note || ""; return t; })(), false, true));
+    }
+
+    function collect() {
+      var q = function (key) { var n = grid.querySelector('[data-key="' + key + '"]'); return n ? n.value : ""; };
+      var out = {
+        name: q("name").trim(),
+        attr: getRadio(grid, "attr") || "正式需求",
+        demander: q("demander"),
+        project: q("project"),
+        module: q("module"),
+        qty: q("qty"),
+        workload: q("workload").trim()
+      };
+      if (!isCreate) {
+        out.status = q("status") || "未开始";
+        out.dispatchMonth = q("dispatchMonth");
+        out.dispatchDate = q("dispatchDate");
+        out.ddl = q("ddl");
+        out.supplierId = q("supplier");
+        out.scheduleFiles = schedFiles;
+        out.quoteAmount = q("quoteAmount");
+        out.quoteCurrency = q("quoteCurrency") || "RMB";
+        out.acceptDate = q("acceptDate");
+        out.testResult = getRadio(grid, "testResult");
+        out.testComment = q("testComment");
+        out.rating = rv.val;
+        out.ratingText = q("ratingText");
+        out.note = q("note");
+      }
+      return out;
+    }
+    return { node: grid, collect: collect };
+  }
+
+  /* ================= 合同表单 ================= */
+  function contractForm(c) {
+    var grid = el("div", "form-grid");
+    grid.appendChild(fieldRow("供应商名称", (function () {
+      var s = el("input"); s.type = "text"; s.value = supplierName(c.supplierId); s.disabled = true;
+      return s;
+    })()));
+    grid.appendChild(fieldRow("是否签署合同", makeRadio("signed", ["是", "否"], c.signed || "否")));
+    grid.appendChild(fieldRow("供应商签约主体", makeInput("text", "supplierParty", c.supplierParty)));
+    grid.appendChild(fieldRow("我方签约主体", makeInput("text", "ourParty", c.ourParty)));
+    grid.appendChild(fieldRow("合同开始日期", makeInput("date", "startDate", c.startDate)));
+    grid.appendChild(fieldRow("合同结束日期", makeInput("date", "endDate", c.endDate)));
+    function collect() {
+      return {
+        signed: getRadio(grid, "signed"),
+        supplierParty: grid.querySelector('[data-key="supplierParty"]').value.trim(),
+        ourParty: grid.querySelector('[data-key="ourParty"]').value.trim(),
+        startDate: grid.querySelector('[data-key="startDate"]').value,
+        endDate: grid.querySelector('[data-key="endDate"]').value
+      };
+    }
+    return { node: grid, collect: collect };
+  }
+
+  /* ================= 模块过滤状态 ================= */
+  var moduleState = {
+    suppliers: { search: "", category: "", status: "", type: "" },
+    dispatch: { search: "", project: "", module: "", supplier: "", attr: "", status: "", sort: "createdAt", order: "desc", group: false },
+    contracts: { search: "", supplier: "", signed: "" },
+    settlement: { search: "", supplier: "", project: "", status: "", from: "", to: "" }
+  };
+
+  function parseQuery(qstr) {
+    var o = {};
+    (qstr || "").split("&").forEach(function (kv) {
+      if (!kv) return;
+      var p = kv.split("=");
+      o[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || "");
+    });
+    return o;
+  }
+
+  /* ================= 通用：页面头 ================= */
+  function pageHead(title, sub, actions) {
+    var head = el("div", "page-head");
+    var left = el("div");
+    var t = el("div", "page-title", title);
+    left.appendChild(t);
+    if (sub) { var s = el("div", "page-sub", sub); left.appendChild(s); }
+    head.appendChild(left);
+    var right = el("div", "page-actions");
+    (actions || []).forEach(function (a) { right.appendChild(a); });
+    head.appendChild(right);
+    return head;
+  }
+  function emptyBox(icon, title, desc, actionNode) {
+    var e = el("div", "empty-state");
+    if (icon) e.appendChild(el("div", "empty-icon", icon));
+    if (title) e.appendChild(el("div", "empty-title", title));
+    if (desc) e.appendChild(el("div", "empty-desc", desc));
+    if (actionNode) e.appendChild(actionNode);
+    return e;
+  }
+
+  /* ================= 模块：工作台 ================= */
+  function renderDashboard(query) {
+    var c = $("pageContainer"); c.innerHTML = "";
+    var all = demands;
+    var ongoing = all.filter(function (d) { return d.status !== "已完成"; });
+    var done = all.filter(function (d) { return d.status === "已完成"; });
+    var pendingSettle = all.filter(function (d) { return d.settlement && !d.settlement.confirmed; });
+
+    var statRow = el("div", "stat-row");
+    function statCard(label, value, sub, unit, route) {
+      var sc = el("div", "stat-card" + (route ? " clickable" : ""));
+      sc.appendChild(el("div", "stat-label", label));
+      var v = el("div", "stat-value"); v.textContent = value;
+      if (unit) v.appendChild(el("span", "unit", unit));
+      sc.appendChild(v);
+      if (sub) sc.appendChild(el("div", "stat-sub", sub));
+      if (route) sc.addEventListener("click", function () { location.hash = "#/" + route; });
+      return sc;
+    }
+    statRow.appendChild(statCard("总需求单", all.length, "全部需求订单", "单", "dispatch"));
+    statRow.appendChild(statCard("进行中需求", ongoing.length, "未完成的需求订单", "单", "dispatch"));
+    statRow.appendChild(statCard("供应商总数", suppliers.length, "已入库供应商", "家", "suppliers"));
+    statRow.appendChild(statCard("待结算", pendingSettle.length, "尚未确认结算", "单", "settlement"));
+    c.appendChild(statRow);
+
+    // 进行中需求看板
+    var kbWrap = el("div", "card");
+    var kbHead = el("div", "card-head");
+    kbHead.appendChild(el("div", "card-title", "进行中需求 · 看板"));
+    var goDispatch = el("button", "btn btn-ghost btn-sm", "进入发包管理 →");
+    goDispatch.addEventListener("click", function () { location.hash = "#/dispatch"; });
+    kbHead.appendChild(goDispatch);
+    kbWrap.appendChild(kbHead);
+
+    var kanban = el("div", "kanban");
+    ["未开始", "进行中", "延期"].forEach(function (st) {
+      var col = el("div", "kanban-col");
+      var ch = el("div", "kanban-head");
+      ch.appendChild(el("span", "", st));
+      ch.appendChild(el("span", "kanban-count", String(ongoing.filter(function (d) { return d.status === st; }).length)));
+      col.appendChild(ch);
+      var cards = el("div", "kanban-cards");
+      ongoing.filter(function (d) { return d.status === st; }).forEach(function (d) {
+        var card = el("div", "kanban-card");
+        card.appendChild(el("div", "kc-title", d.name));
+        var meta = el("div", "kc-meta");
+        meta.appendChild(el("span", "tag", d.project));
+        meta.appendChild(el("span", "tag", d.module));
+        if (d.supplierId) meta.appendChild(el("span", "tag", supplierName(d.supplierId)));
+        card.appendChild(meta);
+        var foot = el("div", "kc-foot");
+        foot.appendChild(el("span", "", d.demander || ""));
+        foot.appendChild(el("span", "", (d.ddl ? "DDL " + d.ddl : "")));
+        card.appendChild(foot);
+        card.addEventListener("click", function () { openDemandEditor(d); });
+        cards.appendChild(card);
+      });
+      if (!cards.children.length) cards.appendChild(el("div", "kanban-empty", "暂无需求"));
+      col.appendChild(cards);
+      kanban.appendChild(col);
+    });
+    kbWrap.appendChild(kanban);
+    c.appendChild(kbWrap);
+
+    var tip = el("div", "hint", "提示：点击看板卡片可打开需求详情；顶部搜索框支持全局检索需求名称、供应商、项目等。");
+    c.appendChild(tip);
+  }
+
+  /* ================= 模块：供应商库 ================= */
+  function renderSuppliers(query) {
+    var st = moduleState.suppliers;
+    if (query) { var q = parseQuery(query); for (var k in q) if (k in st) st[k] = q[k]; }
+
+    var c = $("pageContainer"); c.innerHTML = "";
+
+    var btnAdd = el("button", "btn btn-primary", "＋ 供应商入库");
+    btnAdd.addEventListener("click", function () { openSupplierForm(null); });
+    var btnLink = el("button", "btn btn-ghost", "🔗 生成入库链接");
+    btnLink.addEventListener("click", showOnboardLink);
+    c.appendChild(pageHead("供应商库", "管理所有入库供应商及其资质、合作状态", [btnAdd, btnLink]));
+
+    // 搜索 + 筛选
+    var tb = el("div", "toolbar");
+    var sb = el("div", "search-box");
+    var si = el("input"); si.type = "search"; si.placeholder = "搜索供应商名称 / 擅长领域…"; si.value = st.search;
+    si.addEventListener("input", function () { st.search = si.value; renderSuppliers(); });
+    sb.appendChild(si); tb.appendChild(sb);
+    var cat = el("select");
+    cat.innerHTML = '<option value="">全部分类</option>' + config.supplierCategories.map(function (x) { return '<option value="' + esc(x) + '">' + esc(x) + "</option>"; }).join("");
+    cat.value = st.category; cat.addEventListener("change", function () { st.category = cat.value; renderSuppliers(); });
+    var stSel = el("select");
+    stSel.innerHTML = '<option value="">全部状态</option><option value="未合作">未合作</option><option value="合作中">合作中</option><option value="静态">静态</option><option value="终止合作">终止合作</option>';
+    stSel.value = st.status; stSel.addEventListener("change", function () { st.status = stSel.value; renderSuppliers(); });
+    var tySel = el("select");
+    tySel.innerHTML = '<option value="">全部类型</option><option value="公司">公司</option><option value="个人">个人</option>';
+    tySel.value = st.type; tySel.addEventListener("change", function () { st.type = tySel.value; renderSuppliers(); });
+    tb.appendChild(el("span", "muted", "分类")); tb.appendChild(cat);
+    tb.appendChild(el("span", "muted", "状态")); tb.appendChild(stSel);
+    tb.appendChild(el("span", "muted", "类型")); tb.appendChild(tySel);
+    c.appendChild(tb);
+
+    // 过滤
+    var list = suppliers.filter(function (s) {
+      if (st.search && (s.name + " " + (s.specialty || []).join(" ") + " " + (s.scale || "")).toLowerCase().indexOf(st.search.toLowerCase()) < 0) return false;
+      if (st.category && s.category !== st.category) return false;
+      if (st.type && s.type !== st.type) return false;
+      if (st.status && computeCoopStatus(s) !== st.status) return false;
+      return true;
+    });
+
+    if (!list.length) {
+      c.appendChild(emptyBox("▤", "暂无供应商", "点击右上角「供应商入库」新增第一家供应商。", null));
+      return;
+    }
+
+    var tw = el("div", "table-wrap");
+    var table = el("table", "data-table");
+    var thead = "<thead><tr><th>供应商名称</th><th>分类</th><th>类型</th><th>规模</th><th>擅长领域</th><th>合作状态</th><th>合作项目</th><th>操作</th></tr></thead>";
+    var tbody = "<tbody>";
+    list.forEach(function (s) {
+      var stCoop = computeCoopStatus(s);
+      tbody += "<tr>";
+      tbody += '<td><b>' + esc(s.name) + "</b>" + (s.statusOverride ? '<div class="cell-sub">（手动：' + esc(s.statusOverride) + "）</div>" : "") + "</td>";
+      tbody += "<td>" + (s.category ? '<span class="badge purple">' + esc(s.category) + "</span>" : '<span class="muted">—</span>') + "</td>";
+      tbody += "<td>" + esc(s.type || "—") + "</td>";
+      tbody += "<td>" + esc(s.scale || "—") + "</td>";
+      tbody += "<td>" + ((s.specialty || []).length ? s.specialty.map(function (x) { return '<span class="tag">' + esc(x) + "</span>"; }).join("") : '<span class="muted">—</span>') + "</td>";
+      tbody += "<td>" + coopBadge(stCoop) + "</td>";
+      tbody += "<td>" + ((s.projects || []).length ? s.projects.map(function (x) { return '<span class="tag">' + esc(x) + "</span>"; }).join("") : '<span class="muted">—</span>') + "</td>";
+      tbody += '<td><div class="row-actions">'
+        + '<button class="link-btn" data-act="edit" data-id="' + s.id + '">编辑</button>'
+        + '<button class="link-btn" data-act="demand" data-id="' + s.id + '">需求单</button>'
+        + '<button class="link-btn" data-act="contract" data-id="' + s.id + '">合同</button>'
+        + '<button class="link-btn danger" data-act="del" data-id="' + s.id + '">删除</button>'
+        + "</div></td>";
+      tbody += "</tr>";
+    });
+    tbody += "</tbody>";
+    table.innerHTML = thead + tbody;
+    tw.appendChild(table);
+    c.appendChild(tw);
+
+    // 事件委托
+    table.querySelectorAll("button[data-act]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = b.dataset.id; var s = supplierById(id);
+        if (b.dataset.act === "edit") openSupplierForm(s);
+        else if (b.dataset.act === "demand") { moduleState.dispatch.supplier = id; location.hash = "#/dispatch"; }
+        else if (b.dataset.act === "contract") { moduleState.contracts.supplier = id; location.hash = "#/contracts"; }
+        else if (b.dataset.act === "del") deleteSupplier(s);
+      });
+    });
+
+    var tip = el("div", "hint", "合作状态自动判断规则：有正在做的需求（发包时间≤今天≤DDL）→合作中；测试未通过→终止合作；曾有需求但当前无进行中→静态；无需求→未合作。可在编辑里手动覆盖。");
+    c.appendChild(tip);
+  }
+
+  function openSupplierForm(s) {
+    var isNew = !s;
+    var form = supplierForm(s || {}, false);
+    var body = el("div"); body.appendChild(form.node);
+    var cancel = el("button", "btn btn-ghost", "取消"); cancel.addEventListener("click", closeModal);
+    var save = el("button", "btn btn-primary", isNew ? "入库" : "保存");
+    save.addEventListener("click", function () {
+      var data = form.collect();
+      if (!data.name) { toast("请填写供应商名称"); return; }
+      if (isNew) {
+        if (suppliers.some(function (x) { return x.name === data.name; })) { toast("已存在同名供应商"); return; }
+        var ns = Object.assign({ id: uid(), createdAt: todayStr() }, data);
+        suppliers.push(ns);
+        // 自动同步到合同管理
+        contracts.push({ id: uid(), supplierId: ns.id, signed: "否", supplierParty: "", ourParty: "", startDate: "", endDate: "", createdAt: todayStr() });
+        saveContracts();
+        saveSuppliers();
+        toast("供应商已入库，并已同步到合同管理");
+      } else {
+        // 重名校验
+        if (suppliers.some(function (x) { return x.name === data.name && x.id !== s.id; })) { toast("已存在同名供应商"); return; }
+        Object.assign(s, data);
+        saveSuppliers();
+        toast("已保存");
+      }
+      closeModal(); renderSuppliers();
+    });
+    openModal(isNew ? "供应商入库" : "编辑供应商：" + s.name, body, el("div"), false);
+    $("modal").querySelector(".modal-foot").appendChild(cancel); $("modal").querySelector(".modal-foot").appendChild(save);
+  }
+
+  function deleteSupplier(s) {
+    var linkedDemands = demands.filter(function (d) { return d.supplierId === s.id; }).length;
+    var linkedContracts = contracts.filter(function (c) { return c.supplierId === s.id; }).length;
+    if (linkedDemands || linkedContracts) {
+      toast("该供应商已关联 " + linkedDemands + " 条需求、 " + linkedContracts + " 条合同，无法删除（请先解除关联）");
+      return;
+    }
+    if (!window.confirm("确定删除供应商「" + s.name + "」？")) return;
+    suppliers = suppliers.filter(function (x) { return x.id !== s.id; });
+    contracts = contracts.filter(function (c) { return c.supplierId !== s.id; });
+    saveSuppliers(); saveContracts(); renderSuppliers(); toast("已删除");
+  }
+
+  function showOnboardLink() {
+    var url = location.origin + location.pathname + "#/onboard";
+    var body = el("div");
+    body.appendChild(el("p", "muted", "把下面的链接发给供应商，对方打开后只会看到入库登记表，看不到网站其他任何内容。"));
+    var box = el("div"); box.style.cssText = "margin:14px 0;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);word-break:break-all;font-size:13px;";
+    box.textContent = url;
+    body.appendChild(box);
+    body.appendChild(el("p", "hint warn", "注意：当前为纯前端静态部署，供应商在自己浏览器填写后数据保存在对方浏览器里，不会自动同步回你这边。正式跨设备使用需要接入后端（见系统设置说明）。"));
+    var copy = el("button", "btn btn-primary", "复制链接");
+    copy.addEventListener("click", function () { copyText(url, function () { toast("已复制入库链接"); }); });
+    openModal("生成供应商自助入库链接", body, copy, true);
+  }
+
+  /* ================= 模块：发包管理 ================= */
+  function renderDispatch(query) {
+    var st = moduleState.dispatch;
+    if (query) { var q = parseQuery(query); for (var k in q) if (k in st) st[k] = q[k]; }
+
+    var c = $("pageContainer"); c.innerHTML = "";
+
+    var btnAdd = el("button", "btn btn-primary", "＋ 需求单下达");
+    btnAdd.addEventListener("click", function () { openDemandCreate(); });
+    var btnGroup = el("button", "btn btn-ghost", st.group ? "取消分组" : "按项目分组");
+    btnGroup.addEventListener("click", function () { st.group = !st.group; renderDispatch(); });
+    c.appendChild(pageHead("发包管理", "业务老师下达需求单，后续由管理员完善供应商、报价、验收等信息", [btnAdd, btnGroup]));
+
+    if (!isAdmin()) {
+      var per = el("div", "hint", "当前身份：「" + esc(config.currentUser) + "」，仅可查看/管理所属项目（" + myProjects().join("、") + "）的发包需求。");
+      c.appendChild(per);
+    }
+
+    // 搜索 + 筛选
+    var tb = el("div", "toolbar");
+    var sb = el("div", "search-box");
+    var si = el("input"); si.type = "search"; si.placeholder = "搜索需求名称 / 需求人…"; si.value = st.search;
+    si.addEventListener("input", function () { st.search = si.value; renderDispatch(); });
+    sb.appendChild(si); tb.appendChild(sb);
+    tb.appendChild(el("span", "spacer"));
+    c.appendChild(tb);
+
+    var fb = el("div", "filter-bar");
+    function fsel(label, opts, val, onchange) {
+      var item = el("div", "filter-item");
+      item.appendChild(el("span", "", label));
+      var s = el("select");
+      s.innerHTML = '<option value="">全部</option>' + opts.map(function (x) { return '<option value="' + esc(x) + '">' + esc(x) + "</option>"; }).join("");
+      s.value = val || "";
+      s.addEventListener("change", function () { onchange(s.value); });
+      item.appendChild(s);
+      return item;
+    }
+    fb.appendChild(fsel("项目", config.projects, st.project, function (v) { st.project = v; renderDispatch(); }));
+    fb.appendChild(fsel("需求模块", config.demandCategories, st.module, function (v) { st.module = v; renderDispatch(); }));
+    fb.appendChild(fsel("供应商", suppliers.map(function (s) { return s.name; }), (function () { var s = supplierById(st.supplier); return s ? s.name : ""; })(), function (v) { var s = suppliers.find(function (x) { return x.name === v; }); st.supplier = s ? s.id : ""; renderDispatch(); }));
+    fb.appendChild(fsel("需求属性", ["正式需求", "测试需求"], st.attr, function (v) { st.attr = v; renderDispatch(); }));
+    fb.appendChild(fsel("需求状态", ["未开始", "进行中", "已完成", "延期"], st.status, function (v) { st.status = v; renderDispatch(); }));
+    var sortItem = el("div", "filter-item");
+    sortItem.appendChild(el("span", "", "排序"));
+    var sSel = el("select");
+    sSel.innerHTML = '<option value="createdAt">创建时间</option><option value="dispatchDate">发包时间</option><option value="ddl">DDL</option><option value="quoteAmount">报价金额</option>';
+    sSel.value = st.sort;
+    sSel.addEventListener("change", function () { st.sort = sSel.value; renderDispatch(); });
+    sortItem.appendChild(sSel);
+    fb.appendChild(sortItem);
+    var orderItem = el("div", "filter-item");
+    orderItem.appendChild(el("span", "", "方向"));
+    var oSel = el("select");
+    oSel.innerHTML = '<option value="desc">降序</option><option value="asc">升序</option>';
+    oSel.value = st.order;
+    oSel.addEventListener("change", function () { st.order = oSel.value; renderDispatch(); });
+    orderItem.appendChild(oSel);
+    fb.appendChild(orderItem);
+    c.appendChild(fb);
+
+    // 过滤可见需求
+    var list = visibleDemands().filter(function (d) {
+      if (st.supplier && d.supplierId !== st.supplier) return false;
+      if (st.search) {
+        var hay = (d.name + " " + (d.demander || "") + " " + supplierName(d.supplierId)).toLowerCase();
+        if (hay.indexOf(st.search.toLowerCase()) < 0) return false;
+      }
+      if (st.project && d.project !== st.project) return false;
+      if (st.module && d.module !== st.module) return false;
+      if (st.attr && d.attr !== st.attr) return false;
+      if (st.status && d.status !== st.status) return false;
+      return true;
+    });
+
+    // 排序
+    list.sort(function (a, b) {
+      var va = a[st.sort], vb = b[st.sort];
+      if (st.sort === "quoteAmount") { va = Number(va) || 0; vb = Number(vb) || 0; }
+      if (va == null) va = ""; if (vb == null) vb = "";
+      if (va < vb) return st.order === "asc" ? -1 : 1;
+      if (va > vb) return st.order === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    if (!list.length) {
+      c.appendChild(emptyBox("⇅", "暂无需求单", "点击右上角「需求单下达」新增第一条需求订单。", null));
+      return;
+    }
+
+    var tw = el("div", "table-wrap");
+    var table = el("table", "data-table");
+
+    function demandRows(arr) {
+      var html = "";
+      arr.forEach(function (d) {
+        html += "<tr>";
+        html += '<td><b>' + esc(d.name) + "</b><div class='cell-sub'>" + esc(d.createdAt || "") + "</div></td>";
+        html += "<td>" + attrBadge(d.attr) + "</td>";
+        html += '<td><select class="cell-select" data-stat="' + d.id + '">' + ["未开始", "进行中", "已完成", "延期"].map(function (x) { return '<option value="' + x + '"' + (d.status === x ? " selected" : "") + ">" + x + "</option>"; }).join("") + "</select></td>";
+        html += "<td>" + esc(d.demander || "—") + "</td>";
+        html += "<td>" + esc(d.project || "—") + "</td>";
+        html += "<td>" + esc(d.module || "—") + "</td>";
+        html += '<td class="num">' + esc(d.qty || "") + "</td>";
+        html += "<td>" + esc(d.workload || "—") + "</td>";
+        html += "<td>" + esc(d.dispatchMonth || "—") + "</td>";
+        html += "<td>" + esc(d.dispatchDate || "—") + "</td>";
+        html += "<td>" + (d.ddl ? (d.ddl < todayStr() && d.status !== "已完成" ? '<span style="color:var(--danger)">' + esc(d.ddl) + "</span>" : esc(d.ddl)) : "—") + "</td>";
+        html += "<td>" + (d.supplierId ? esc(supplierName(d.supplierId)) : '<span class="muted">—</span>') + "</td>";
+        html += "<td>" + ((d.scheduleFiles || []).length ? "📎" + d.scheduleFiles.length : "—") + "</td>";
+        html += '<td class="num">' + (d.quoteAmount ? money(d.quoteAmount, d.quoteCurrency) : "—") + "</td>";
+        html += "<td>" + esc(d.acceptDate || "—") + "</td>";
+        html += "<td>" + (d.testResult ? (d.testResult === "测试通过" ? '<span class="badge green">测试通过</span>' : '<span class="badge red">测试未通过</span>') + (d.testComment ? '<div class="cell-sub">' + esc(d.testComment) + "</div>" : "") : '<span class="muted">—</span>') + "</td>";
+        html += "<td>" + (d.rating ? '<span class="stars" style="color:#f5a623">' + starStr(d.rating) + "</span>" : '<span class="muted">—</span>') + "</td>";
+        html += '<td title="' + esc(d.note || "") + '">' + esc((d.note || "").slice(0, 12) || "—") + "</td>";
+        html += '<td><div class="row-actions"><button class="link-btn" data-edit="' + d.id + '">编辑</button></div></td>';
+        html += "</tr>";
+      });
+      return html;
+    }
+
+    if (st.group) {
+      var groupWrap = el("div");
+      var projects = config.projects.filter(function (p) { return list.some(function (d) { return d.project === p; }); });
+      projects.forEach(function (p) {
+        var grp = el("div", "card"); grp.style.marginBottom = "14px";
+        var gh = el("div", "card-head");
+        gh.appendChild(el("div", "card-title", "项目：" + p));
+        gh.appendChild(el("span", "kanban-count", list.filter(function (d) { return d.project === p; }).length + " 单"));
+        grp.appendChild(gh);
+        var gtw = el("div", "table-wrap");
+        var gt = el("table", "data-table");
+        gt.innerHTML = headerHtml() + "<tbody>" + demandRows(list.filter(function (d) { return d.project === p; })) + "</tbody>";
+        gtw.appendChild(gt); grp.appendChild(gtw);
+        groupWrap.appendChild(grp);
+        bindDispatchTable(gt);
+      });
+      c.appendChild(groupWrap);
+    } else {
+      table.innerHTML = headerHtml() + "<tbody>" + demandRows(list) + "</tbody>";
+      tw.appendChild(table);
+      c.appendChild(tw);
+      bindDispatchTable(table);
+    }
+  }
+
+  function headerHtml() {
+    return "<thead><tr><th>需求名称</th><th>属性</th><th>状态</th><th>需求人</th><th>项目</th><th>模块</th><th class='num'>数量</th><th>内部工作量</th><th>发包月份</th><th>发包时间</th><th>DDL</th><th>供应商</th><th>排期</th><th class='num'>报价</th><th>验收</th><th>测试情况</th><th>评价</th><th>备注</th><th>操作</th></tr></thead>";
+  }
+
+  function bindDispatchTable(table) {
+    table.querySelectorAll("select[data-stat]").forEach(function (s) {
+      s.addEventListener("change", function () {
+        var d = demands.find(function (x) { return x.id === s.dataset.stat; });
+        if (d) { d.status = s.value; saveDemands(); toast("状态已更新为「" + d.status + "」"); }
+      });
+    });
+    table.querySelectorAll("button[data-edit]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var d = demands.find(function (x) { return x.id === b.dataset.edit; });
+        if (d) openDemandEditor(d);
+      });
+    });
+  }
+
+  function openDemandCreate() {
+    var form = demandForm(null, "create");
+    var body = el("div"); body.appendChild(form.node);
+    var cancel = el("button", "btn btn-ghost", "取消"); cancel.addEventListener("click", closeModal);
+    var save = el("button", "btn btn-primary", "下达需求单");
+    save.addEventListener("click", function () {
+      var data = form.collect();
+      if (!data.name) { toast("请填写需求名称"); return; }
+      if (!data.demander) { toast("请选择需求人"); return; }
+      if (!data.project) { toast("请选择所属项目"); return; }
+      if (!data.module) { toast("请选择需求模块"); return; }
+      var nd = Object.assign({
+        id: uid(), status: "未开始", supplierId: "", scheduleFiles: [],
+        quoteAmount: "", quoteCurrency: "RMB", acceptDate: "", testResult: "", testComment: "",
+        rating: 0, ratingText: "", note: "", createdBy: config.currentUser, createdAt: todayStr(),
+        settlement: { completion: 0, settleFiles: [], invoiceFiles: [], confirmed: false }
+      }, data);
+      demands.push(nd);
+      saveDemands();
+      closeModal(); toast("需求单已下达，并同步到结算");
+      renderDispatch();
+    });
+    openModal("需求单下达", body, el("div"));
+    $("modal").querySelector(".modal-foot").appendChild(cancel); $("modal").querySelector(".modal-foot").appendChild(save);
+  }
+
+  function openDemandEditor(d) {
+    var form = demandForm(d, "edit");
+    var body = el("div"); body.appendChild(form.node);
+    var cancel = el("button", "btn btn-ghost", "取消"); cancel.addEventListener("click", closeModal);
+    var save = el("button", "btn btn-primary", "保存");
+    save.addEventListener("click", function () {
+      var data = form.collect();
+      if (!data.name) { toast("请填写需求名称"); return; }
+      Object.assign(d, data);
+      saveDemands();
+      closeModal(); toast("已保存"); renderDispatch();
+    });
+    openModal("编辑需求单", body, el("div"));
+    $("modal").querySelector(".modal-foot").appendChild(cancel); $("modal").querySelector(".modal-foot").appendChild(save);
+  }
+
+  /* ================= 模块：合同管理 ================= */
+  function renderContracts(query) {
+    var st = moduleState.contracts;
+    if (query) { var q = parseQuery(query); for (var k in q) if (k in st) st[k] = q[k]; }
+
+    var c = $("pageContainer"); c.innerHTML = "";
+    c.appendChild(pageHead("合同管理", "合同台账；新增供应商会自动同步生成一条合同记录", []));
+
+    var tb = el("div", "toolbar");
+    var sb = el("div", "search-box");
+    var si = el("input"); si.type = "search"; si.placeholder = "搜索供应商名称 / 签约主体…"; si.value = st.search;
+    si.addEventListener("input", function () { st.search = si.value; renderContracts(); });
+    sb.appendChild(si); tb.appendChild(sb);
+    var supSel = el("select");
+    supSel.innerHTML = '<option value="">全部供应商</option>' + suppliers.map(function (s) { return '<option value="' + s.id + '">' + esc(s.name) + "</option>"; }).join("");
+    supSel.value = st.supplier; supSel.addEventListener("change", function () { st.supplier = supSel.value; renderContracts(); });
+    var signedSel = el("select");
+    signedSel.innerHTML = '<option value="">是否签署（全部）</option><option value="是">已签署</option><option value="否">未签署</option>';
+    signedSel.value = st.signed; signedSel.addEventListener("change", function () { st.signed = signedSel.value; renderContracts(); });
+    tb.appendChild(el("span", "muted", "供应商")); tb.appendChild(supSel);
+    tb.appendChild(el("span", "muted", "签署")); tb.appendChild(signedSel);
+    c.appendChild(tb);
+
+    var list = contracts.filter(function (ct) {
+      if (st.supplier && ct.supplierId !== st.supplier) return false;
+      if (st.signed && ct.signed !== st.signed) return false;
+      if (st.search) {
+        var hay = (supplierName(ct.supplierId) + " " + (ct.supplierParty || "") + " " + (ct.ourParty || "")).toLowerCase();
+        if (hay.indexOf(st.search.toLowerCase()) < 0) return false;
+      }
+      return true;
+    });
+
+    if (!list.length) {
+      c.appendChild(emptyBox("▣", "暂无合同记录", "新增供应商后会自动在这里生成对应合同条目。", null));
+      return;
+    }
+
+    var tw = el("div", "table-wrap");
+    var table = el("table", "data-table");
+    var html = "<thead><tr><th>供应商名称</th><th>是否签署合同</th><th>供应商签约主体</th><th>我方签约主体</th><th>合同开始日期</th><th>合同结束日期</th><th>操作</th></tr></thead><tbody>";
+    list.forEach(function (ct) {
+      html += "<tr>";
+      html += "<td><b>" + esc(supplierName(ct.supplierId)) + "</b></td>";
+      html += '<td><select class="cell-select" data-signed="' + ct.id + '"><option value="是"' + (ct.signed === "是" ? " selected" : "") + ">是</option><option value=\"否\"" + (ct.signed === "否" ? " selected" : "") + ">否</option></select></td>";
+      html += "<td>" + esc(ct.supplierParty || "—") + "</td>";
+      html += "<td>" + esc(ct.ourParty || "—") + "</td>";
+      html += "<td>" + esc(ct.startDate || "—") + "</td>";
+      html += "<td>" + esc(ct.endDate || "—") + "</td>";
+      html += '<td><button class="link-btn" data-edit="' + ct.id + '">编辑</button></td>';
+      html += "</tr>";
+    });
+    html += "</tbody>";
+    table.innerHTML = html;
+    tw.appendChild(table);
+    c.appendChild(tw);
+
+    table.querySelectorAll("select[data-signed]").forEach(function (s) {
+      s.addEventListener("change", function () {
+        var ct = contracts.find(function (x) { return x.id === s.dataset.signed; });
+        if (ct) { ct.signed = s.value; saveContracts(); toast("已更新签署状态"); }
+      });
+    });
+    table.querySelectorAll("button[data-edit]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var ct = contracts.find(function (x) { return x.id === b.dataset.edit; });
+        if (ct) openContractEditor(ct);
+      });
+    });
+  }
+
+  function openContractEditor(ct) {
+    var form = contractForm(ct);
+    var body = el("div"); body.appendChild(form.node);
+    var cancel = el("button", "btn btn-ghost", "取消"); cancel.addEventListener("click", closeModal);
+    var save = el("button", "btn btn-primary", "保存");
+    save.addEventListener("click", function () {
+      Object.assign(ct, form.collect());
+      saveContracts(); closeModal(); toast("已保存"); renderContracts();
+    });
+    openModal("编辑合同", body, el("div"));
+    $("modal").querySelector(".modal-foot").appendChild(cancel); $("modal").querySelector(".modal-foot").appendChild(save);
+  }
+
+  /* ================= 模块：结算 ================= */
+  function renderSettlement(query) {
+    var st = moduleState.settlement;
+    if (query) { var q = parseQuery(query); for (var k in q) if (k in st) st[k] = q[k]; }
+
+    var c = $("pageContainer"); c.innerHTML = "";
+    c.appendChild(pageHead("结算", "需求单自动同步到此；完成度手填后自动计算实际结算金额", []));
+
+    var tb = el("div", "toolbar");
+    var sb = el("div", "search-box");
+    var si = el("input"); si.type = "search"; si.placeholder = "搜索需求名称 / 供应商…"; si.value = st.search;
+    si.addEventListener("input", function () { st.search = si.value; renderSettlement(); });
+    sb.appendChild(si); tb.appendChild(sb);
+    tb.appendChild(el("span", "spacer"));
+    c.appendChild(tb);
+
+    var fb = el("div", "filter-bar");
+    function fsel(label, opts, val, onchange) {
+      var item = el("div", "filter-item");
+      item.appendChild(el("span", "", label));
+      var s = el("select");
+      s.innerHTML = '<option value="">全部</option>' + opts.map(function (x) { return '<option value="' + esc(x) + '">' + esc(x) + "</option>"; }).join("");
+      s.value = val || "";
+      s.addEventListener("change", function () { onchange(s.value); });
+      item.appendChild(s);
+      return item;
+    }
+    fb.appendChild(fsel("供应商", suppliers.map(function (s) { return s.name; }), (function () { var s = supplierById(st.supplier); return s ? s.name : ""; })(), function (v) { var s = suppliers.find(function (x) { return x.name === v; }); st.supplier = s ? s.id : ""; renderSettlement(); }));
+    fb.appendChild(fsel("项目", config.projects, st.project, function (v) { st.project = v; renderSettlement(); }));
+    fb.appendChild(fsel("结算状态", ["待结算", "已结算"], st.status, function (v) { st.status = v; renderSettlement(); }));
+    var fromItem = el("div", "filter-item");
+    fromItem.appendChild(el("span", "", "开始日期"));
+    var fi = el("input"); fi.type = "date"; fi.value = st.from; fi.addEventListener("change", function () { st.from = fi.value; renderSettlement(); });
+    fromItem.appendChild(fi); fb.appendChild(fromItem);
+    var toItem = el("div", "filter-item");
+    toItem.appendChild(el("span", "", "结束日期"));
+    var ti = el("input"); ti.type = "date"; ti.value = st.to; ti.addEventListener("change", function () { st.to = ti.value; renderSettlement(); });
+    toItem.appendChild(ti); fb.appendChild(toItem);
+    var btnBatch = el("button", "btn btn-ghost", "批量确认结算（勾选）");
+    btnBatch.addEventListener("click", batchConfirm);
+    fb.appendChild(btnBatch);
+    c.appendChild(fb);
+
+    var list = demands.filter(function (d) {
+      if (st.search) {
+        var hay = (d.name + " " + supplierName(d.supplierId)).toLowerCase();
+        if (hay.indexOf(st.search.toLowerCase()) < 0) return false;
+      }
+      if (st.supplier && d.supplierId !== st.supplier) return false;
+      if (st.project && d.project !== st.project) return false;
+      if (st.status === "待结算" && d.settlement.confirmed) return false;
+      if (st.status === "已结算" && !d.settlement.confirmed) return false;
+      if (st.from || st.to) {
+        var ref = d.acceptDate || d.ddl || d.dispatchDate || d.createdAt;
+        if (st.from && ref && ref < st.from) return false;
+        if (st.to && ref && ref > st.to) return false;
+      }
+      return true;
+    });
+
+    if (!list.length) {
+      c.appendChild(emptyBox("¥", "暂无结算记录", "需求单下达后会自动同步到这里。", null));
+      return;
+    }
+
+    var tw = el("div", "table-wrap");
+    var table = el("table", "data-table");
+    var html = "<thead><tr><th><input type='checkbox' class='sel-all'></th><th>需求名称</th><th>属性</th><th>项目</th><th>模块</th><th class='num'>报价</th><th class='num'>完成度</th><th class='num'>实际结算金额</th><th>结算单</th><th>发票</th><th>状态</th></tr></thead><tbody>";
+    list.forEach(function (d) {
+      var amt = actualSettle(d);
+      html += "<tr>";
+      html += '<td><input type="checkbox" class="sel-row" data-id="' + d.id + '"' + (d.settlement.confirmed ? " disabled" : "") + "></td>";
+      html += '<td><b>' + esc(d.name) + "</b>" + (d.supplierId ? '<div class="cell-sub">' + esc(supplierName(d.supplierId)) + "</div>" : "") + "</td>";
+      html += "<td>" + attrBadge(d.attr) + "</td>";
+      html += "<td>" + esc(d.project || "—") + "</td>";
+      html += "<td>" + esc(d.module || "—") + "</td>";
+      html += '<td class="num">' + (d.quoteAmount ? money(d.quoteAmount, d.quoteCurrency) : "—") + "</td>";
+      html += '<td class="num"><input type="number" min="0" max="100" class="cell-input" data-comp="' + d.id + '" value="' + (d.settlement.completion || 0) + '"' + (d.settlement.confirmed ? " disabled" : "") + ">%</td>";
+      html += '<td class="num"><b>' + money(amt, d.quoteCurrency) + "</b></td>";
+      html += "<td>" + ((d.settlement.settleFiles || []).length ? "📎" + d.settlement.settleFiles.length : '<button class="link-btn" data-up="' + d.id + '">上传</button>') + "</td>";
+      html += "<td>" + ((d.settlement.invoiceFiles || []).length ? "📎" + d.settlement.invoiceFiles.length : '<button class="link-btn" data-up="' + d.id + '">上传</button>') + "</td>";
+      html += "<td>" + (d.settlement.confirmed ? '<span class="badge green">已结算</span>' : '<button class="btn btn-primary btn-sm" data-confirm="' + d.id + '">确认结算</button>') + "</td>";
+      html += "</tr>";
+    });
+    html += "</tbody>";
+    table.innerHTML = html;
+    tw.appendChild(table);
+    c.appendChild(tw);
+
+    // 全选
+    table.querySelector(".sel-all").addEventListener("change", function (e) {
+      table.querySelectorAll(".sel-row:not([disabled])").forEach(function (cb) { cb.checked = e.target.checked; });
+    });
+    // 完成度
+    table.querySelectorAll("input[data-comp]").forEach(function (inp) {
+      inp.addEventListener("change", function () {
+        var d = demands.find(function (x) { return x.id === inp.dataset.comp; });
+        if (d) {
+          var v = Math.max(0, Math.min(100, Number(inp.value) || 0));
+          d.settlement.completion = v; inp.value = v; saveDemands(); renderSettlement();
+        }
+      });
+    });
+    // 上传
+    table.querySelectorAll("button[data-up]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var d = demands.find(function (x) { return x.id === b.dataset.up; });
+        if (d) openSettlementFiles(d);
+      });
+    });
+    // 确认
+    table.querySelectorAll("button[data-confirm]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var d = demands.find(function (x) { return x.id === b.dataset.confirm; });
+        if (d) doConfirm(d);
+      });
+    });
+  }
+
+  function doConfirm(d) {
+    if (d.settlement.confirmed) { toast("已结算，不可重复操作"); return; }
+    if (!window.confirm("确认结算「" + d.name + "」？确认后不可撤销。")) return;
+    d.settlement.confirmed = true; d.settlement.confirmedAt = todayStr();
+    saveDemands(); renderSettlement(); toast("已确认结算");
+  }
+  function batchConfirm() {
+    var ids = Array.prototype.slice.call(document.querySelectorAll(".sel-row:checked")).map(function (c) { return c.dataset.id; });
+    if (!ids.length) { toast("请先勾选要结算的需求单"); return; }
+    var n = 0;
+    ids.forEach(function (id) { var d = demands.find(function (x) { return x.id === id; }); if (d && !d.settlement.confirmed) { d.settlement.confirmed = true; d.settlement.confirmedAt = todayStr(); n++; } });
+    saveDemands(); renderSettlement(); toast("已批量确认 " + n + " 单结算");
+  }
+  function openSettlementFiles(d) {
+    var body = el("div");
+    body.appendChild(el("p", "muted", "需求：<b>" + esc(d.name) + "</b>　报价：" + (d.quoteAmount ? money(d.quoteAmount, d.quoteCurrency) : "—")));
+    var grid = el("div", "form-grid");
+    var sf = (d.settlement.settleFiles || []).slice();
+    var iff = (d.settlement.invoiceFiles || []).slice();
+    grid.appendChild(fieldRow("结算单（附件）", fileField(sf, function (f) { sf = f; }), false, true));
+    grid.appendChild(fieldRow("发票（附件）", fileField(iff, function (f) { iff = f; }), false, true));
+    body.appendChild(grid);
+    var cancel = el("button", "btn btn-ghost", "关闭"); cancel.addEventListener("click", closeModal);
+    var save = el("button", "btn btn-primary", "保存附件");
+    save.addEventListener("click", function () {
+      d.settlement.settleFiles = sf; d.settlement.invoiceFiles = iff;
+      saveDemands(); closeModal(); renderSettlement(); toast("附件已保存");
+    });
+    openModal("结算附件", body, el("div"));
+    $("modal").querySelector(".modal-foot").appendChild(cancel); $("modal").querySelector(".modal-foot").appendChild(save);
+  }
+
+  /* ================= 模块：数据分析 ================= */
+  var DIMENSIONS = { "项目": "project", "需求模块": "module", "供应商": "supplier", "需求状态": "status", "需求属性": "attr", "需求人": "demander", "供应商分类": "cat" };
+  var METRICS = { "需求数量": "count", "报价金额": "quote", "结算金额": "settle" };
+
+  function dimKey(d, dim) {
+    switch (dim) {
+      case "项目": return d.project || "(未填)";
+      case "需求模块": return d.module || "(未填)";
+      case "供应商": return d.supplierId ? supplierName(d.supplierId) : "(未指定)";
+      case "需求状态": return d.status || "(未填)";
+      case "需求属性": return d.attr || "(未填)";
+      case "需求人": return d.demander || "(未填)";
+      case "供应商分类": return d.supplierId ? (supplierCat(d.supplierId) || "(未分类)") : "(未指定)";
+      default: return "(未知)";
+    }
+  }
+  function metricVal(d, metric) {
+    if (metric === "count") return 1;
+    if (metric === "quote") return Number(d.quoteAmount) || 0;
+    if (metric === "settle") return actualSettle(d);
+    return 0;
+  }
+  function aggregate(dim, metric) {
+    var buckets = {};
+    demands.forEach(function (d) {
+      var k = dimKey(d, dim);
+      buckets[k] = (buckets[k] || 0) + metricVal(d, metric);
+    });
+    return Object.keys(buckets).map(function (k) { return { label: k, value: buckets[k] }; }).sort(function (a, b) { return b.value - a.value; });
+  }
+
+  function defaultWidgets() {
+    return [
+      { id: uid(), title: "需求数量 · 按项目", type: "bar", dimension: "项目", metric: "需求数量" },
+      { id: uid(), title: "需求数量 · 按品类", type: "bar", dimension: "需求模块", metric: "需求数量" },
+      { id: uid(), title: "需求状态分布", type: "donut", dimension: "需求状态", metric: "需求数量" },
+      { id: uid(), title: "报价金额 · 按项目", type: "bar", dimension: "项目", metric: "报价金额" },
+      { id: uid(), title: "结算金额合计", type: "metric", metric: "settleTotal" }
+    ];
+  }
+
+  function renderAnalytics(query) {
+    if (widgets == null) { widgets = defaultWidgets(); saveWidgets(); }
+    var c = $("pageContainer"); c.innerHTML = "";
+
+    var btnAdd = el("button", "btn btn-primary", "＋ 添加图表");
+    btnAdd.addEventListener("click", openWidgetForm);
+    c.appendChild(pageHead("数据分析", "参考多维表格仪表盘，可自定义维度和指标生成图表", [btnAdd]));
+
+    if (!demands.length) {
+      c.appendChild(emptyBox("◔", "暂无数据可分析", "先到发包管理下达需求单，这里会自动生成分析。", null));
+      return;
+    }
+
+    var grid = el("div", "chart-grid");
+    widgets.forEach(function (w) {
+      grid.appendChild(renderWidget(w));
+    });
+    c.appendChild(grid);
+  }
+
+  function renderWidget(w) {
+    var box = el("div", "chart-widget");
+    var head = el("div", "widget-head");
+    head.appendChild(el("div", "widget-title", w.title));
+    var del = el("button", "widget-del", "✕"); del.title = "删除图表";
+    del.addEventListener("click", function () {
+      widgets = widgets.filter(function (x) { return x.id !== w.id; });
+      saveWidgets(); renderAnalytics();
+    });
+    head.appendChild(del);
+    box.appendChild(head);
+
+    if (w.type === "metric") {
+      var val;
+      if (w.metric === "settleTotal") val = demands.reduce(function (s, d) { return s + actualSettle(d); }, 0);
+      else if (w.metric === "quoteTotal") val = demands.reduce(function (s, d) { return s + (Number(d.quoteAmount) || 0); }, 0);
+      else if (w.metric === "count") val = demands.length;
+      else if (w.metric === "ongoingCount") val = demands.filter(function (d) { return d.status !== "已完成"; }).length;
+      else if (w.metric === "supplierCount") val = suppliers.length;
+      else val = 0;
+      box.appendChild(el("div", "metric-big", fmtNum(val)));
+      box.appendChild(el("div", "metric-sub", "（当前数据）"));
+      return box;
+    }
+
+    var data = aggregate(w.dimension, w.metric);
+    var isMoney = w.metric !== "需求数量";
+    if (w.type === "bar") {
+      var top = data.slice(0, 12);
+      if (!top.length) { box.appendChild(el("div", "muted", "暂无数据")); return box; }
+      var max = Math.max.apply(null, top.map(function (x) { return x.value; })) || 1;
+      var bc = el("div", "bar-chart");
+      top.forEach(function (x, i) {
+        var row = el("div", "bar-row");
+        row.appendChild(el("div", "bar-label", x.label));
+        var track = el("div", "bar-track");
+        var fill = el("div", "bar-fill");
+        fill.style.width = (max ? (x.value / max * 100) : 0) + "%";
+        fill.style.background = CHART_COLORS[i % CHART_COLORS.length];
+        track.appendChild(fill);
+        row.appendChild(track);
+        row.appendChild(el("div", "bar-val", isMoney ? fmtNum(x.value) : fmtNum(x.value)));
+        bc.appendChild(row);
+      });
+      box.appendChild(bc);
+    } else if (w.type === "donut") {
+      var total = data.reduce(function (s, x) { return s + x.value; }, 0);
+      if (!total) { box.appendChild(el("div", "muted", "暂无数据")); return box; }
+      var segs = data.slice(0, 6);
+      var other = data.slice(6).reduce(function (s, x) { return s + x.value; }, 0);
+      var grad = [], acc = 0;
+      segs.forEach(function (x, i) {
+        var p = x.value / total * 100;
+        grad.push(CHART_COLORS[i % CHART_COLORS.length] + " " + acc + "% " + (acc + p) + "%");
+        acc += p;
+      });
+      if (other > 0) grad.push("#cbd3dd " + acc + "% 100%");
+      var dw = el("div", "donut-wrap");
+      var donut = el("div", "donut");
+      donut.style.background = "conic-gradient(" + grad.join(",") + ")";
+      dw.appendChild(donut);
+      var legend = el("div", "donut-legend");
+      segs.forEach(function (x, i) {
+        var row = el("div", "dl-row");
+        var dot = el("span", "dl-dot"); dot.style.background = CHART_COLORS[i % CHART_COLORS.length];
+        row.appendChild(dot);
+        row.appendChild(el("span", "", x.label));
+        row.appendChild(el("span", "dl-val", x.value + " (" + (total ? (x.value / total * 100).toFixed(0) : 0) + "%)"));
+        legend.appendChild(row);
+      });
+      if (other > 0) {
+        var r2 = el("div", "dl-row");
+        var d2 = el("span", "dl-dot"); d2.style.background = "#cbd3dd";
+        r2.appendChild(d2); r2.appendChild(el("span", "", "其他"));
+        r2.appendChild(el("span", "dl-val", other + " (" + (other / total * 100).toFixed(0) + "%)"));
+        legend.appendChild(r2);
+      }
+      dw.appendChild(legend);
+      box.appendChild(dw);
+    }
+    return box;
+  }
+
+  function openWidgetForm() {
+    var body = el("div");
+    var grid = el("div", "form-grid");
+    var titleInp = makeInput("text", "title", "", "图表标题");
+    var typeSel = makeSelect("type", [{ value: "bar", label: "柱状图" }, { value: "donut", label: "环形图" }, { value: "metric", label: "指标卡" }], "bar");
+    var dimSel = makeSelect("dimension", Object.keys(DIMENSIONS), "项目");
+    var metricSel = makeSelect("metric", [{ value: "需求数量", label: "需求数量" }, { value: "报价金额", label: "报价金额" }, { value: "结算金额", label: "结算金额" }], "需求数量");
+    var metricCardSel = makeSelect("metricCard", [{ value: "count", label: "总需求数" }, { value: "ongoingCount", label: "进行中需求" }, { value: "supplierCount", label: "供应商总数" }, { value: "quoteTotal", label: "总报价金额" }, { value: "settleTotal", label: "结算金额合计" }], "settleTotal");
+
+    function syncType() {
+      var t = typeSel.value;
+      var isMetric = t === "metric";
+      Array.prototype.slice.call(grid.querySelectorAll(".dim-row, .metric-row")).forEach(function (r) { r.style.display = isMetric ? "none" : ""; });
+      Array.prototype.slice.call(grid.querySelectorAll(".metriccard-row")).forEach(function (r) { r.style.display = isMetric ? "" : "none"; });
+    }
+
+    var dimRow = fieldRow("统计维度", dimSel, true); dimRow.classList.add("dim-row");
+    var metricRow = fieldRow("统计指标", metricSel, true); metricRow.classList.add("metric-row");
+    var metricCardRow = fieldRow("指标", metricCardSel, true); metricCardRow.classList.add("metriccard-row");
+    grid.appendChild(fieldRow("图表标题", titleInp, true, true));
+    grid.appendChild(fieldRow("图表类型", typeSel, true));
+    grid.appendChild(dimRow);
+    grid.appendChild(metricRow);
+    grid.appendChild(metricCardRow);
+    typeSel.addEventListener("change", syncType);
+    syncType();
+    body.appendChild(grid);
+
+    var cancel = el("button", "btn btn-ghost", "取消"); cancel.addEventListener("click", closeModal);
+    var save = el("button", "btn btn-primary", "添加");
+    save.addEventListener("click", function () {
+      var w = {
+        id: uid(),
+        title: titleInp.value.trim() || "图表",
+        type: typeSel.value
+      };
+      if (w.type === "metric") w.metric = metricCardSel.value;
+      else { w.dimension = dimSel.value; w.metric = metricSel.value; }
+      widgets.push(w); saveWidgets(); closeModal(); renderAnalytics();
+    });
+    openModal("添加图表", body, el("div"));
+    $("modal").querySelector(".modal-foot").appendChild(cancel); $("modal").querySelector(".modal-foot").appendChild(save);
+  }
+
+  /* ================= 模块：系统设置 ================= */
+  function renderSettings(query) {
+    var c = $("pageContainer"); c.innerHTML = "";
+    c.appendChild(pageHead("系统设置", "成员、项目分组权限、字典与数据说明", []));
+
+    // 成员管理
+    var secMem = el("div", "settings-section");
+    secMem.appendChild(el("h3", "", "业务人员名单"));
+    var memWrap = el("div", "member-chips");
+    config.members.forEach(function (m) {
+      var chip = el("span", "member-chip");
+      chip.appendChild(document.createTextNode(m));
+      var x = el("span", "x", " ✕");
+      x.addEventListener("click", function () {
+        config.members = config.members.filter(function (v) { return v !== m; });
+        Object.keys(config.projectGroups).forEach(function (p) { config.projectGroups[p] = (config.projectGroups[p] || []).filter(function (v) { return v !== m; }); });
+        saveConfig(); renderSettings(); buildUserSelect();
+      });
+      chip.appendChild(x);
+      memWrap.appendChild(chip);
+    });
+    secMem.appendChild(memWrap);
+    var addRow = el("div"); addRow.style.cssText = "margin-top:10px;display:flex;gap:8px;";
+    var addInp = el("input"); addInp.placeholder = "新增人员姓名"; addInp.style.cssText = "padding:7px 10px;border:1px solid var(--border);border-radius:8px;";
+    var addBtn = el("button", "btn btn-ghost btn-sm", "新增");
+    addBtn.addEventListener("click", function () {
+      var n = addInp.value.trim();
+      if (!n) { toast("请输入姓名"); return; }
+      if (config.members.indexOf(n) >= 0) { toast("已存在该人员"); return; }
+      config.members.push(n); saveConfig(); renderSettings(); buildUserSelect();
+    });
+    addRow.appendChild(addInp); addRow.appendChild(addBtn);
+    secMem.appendChild(addRow);
+    c.appendChild(secMem);
+
+    // 项目分组权限
+    var secGrp = el("div", "settings-section");
+    secGrp.appendChild(el("h3", "", "项目分组权限（业务老师归属）"));
+    secGrp.appendChild(el("p", "muted", "为每个项目勾选可访问/管理该项目发包需求的人员；未勾选的项目成员看不到对应发包需求。"));
+    var gt = el("table", "group-table");
+    var ghtml = "<thead><tr><th>项目</th><th>可访问成员（点击切换）</th></tr></thead><tbody>";
+    config.projects.forEach(function (p) {
+      ghtml += "<tr><td><b>" + esc(p) + "</b></td><td><div class='member-chips' data-grp='" + esc(p) + "'>";
+      config.members.forEach(function (m) {
+        var on = (config.projectGroups[p] || []).indexOf(m) >= 0;
+        ghtml += '<span class="member-chip' + (on ? " on" : "") + '" data-m="' + esc(m) + '">' + esc(m) + "</span>";
+      });
+      ghtml += "</div></td></tr>";
+    });
+    ghtml += "</tbody>";
+    gt.innerHTML = ghtml;
+    secGrp.appendChild(gt);
+    gt.querySelectorAll("[data-grp]").forEach(function (wrap) {
+      var p = wrap.dataset.grp;
+      wrap.querySelectorAll(".member-chip").forEach(function (chip) {
+        chip.addEventListener("click", function () {
+          var m = chip.dataset.m;
+          var arr = config.projectGroups[p] || [];
+          var i = arr.indexOf(m);
+          if (i >= 0) arr.splice(i, 1); else arr.push(m);
+          config.projectGroups[p] = arr;
+          saveConfig(); renderSettings();
+        });
+      });
+    });
+    c.appendChild(secGrp);
+
+    // 字典配置
+    var secDict = el("div", "settings-section");
+    secDict.appendChild(el("h3", "", "字典配置"));
+    secDict.appendChild(dictEditor("项目", config.projects, function (v) { config.projects = v; saveConfig(); }));
+    secDict.appendChild(dictEditor("供应商分类", config.supplierCategories, function (v) { config.supplierCategories = v; saveConfig(); }));
+    secDict.appendChild(dictEditor("需求品类（模块）", config.demandCategories, function (v) { config.demandCategories = v; saveConfig(); }));
+    c.appendChild(secDict);
+
+    // 说明
+    var secNote = el("div", "settings-section");
+    secNote.appendChild(el("h3", "", "关于数据存储"));
+    var note = el("div", "hint warn", "当前为纯前端静态部署，所有数据（供应商、需求、合同、结算、附件）保存在<b>当前浏览器</b>的本地存储中，不同设备/不同浏览器之间不互通。若要多人跨设备实时协作（如供应商自助入库直接同步到你这边），需要接入后端数据库。");
+    note.style.lineHeight = "1.7";
+    secNote.appendChild(note);
+    c.appendChild(secNote);
+  }
+
+  function dictEditor(label, list, onchange) {
+    var wrap = el("div", "card"); wrap.style.padding = "14px 16px"; wrap.style.marginBottom = "12px";
+    var head = el("div", "card-head");
+    head.appendChild(el("div", "card-title", label));
+    head.appendChild(el("span", "kanban-count", list.length + " 项"));
+    wrap.appendChild(head);
+    var chips = el("div", "member-chips");
+    list.forEach(function (v) {
+      var chip = el("span", "member-chip");
+      chip.appendChild(document.createTextNode(v));
+      var x = el("span", "x", " ✕");
+      x.addEventListener("click", function () {
+        var nl = list.filter(function (t) { return t !== v; });
+        onchange(nl);
+      });
+      chip.appendChild(x);
+      chips.appendChild(chip);
+    });
+    wrap.appendChild(chips);
+    var addRow = el("div"); addRow.style.cssText = "margin-top:10px;display:flex;gap:8px;";
+    var inp = el("input"); inp.placeholder = "新增" + label; inp.style.cssText = "padding:7px 10px;border:1px solid var(--border);border-radius:8px;";
+    var btn = el("button", "btn btn-ghost btn-sm", "新增");
+    btn.addEventListener("click", function () {
+      var n = inp.value.trim();
+      if (!n) return;
+      if (list.indexOf(n) >= 0) { toast("已存在"); return; }
+      var nl = list.concat([n]); onchange(nl);
+    });
+    addRow.appendChild(inp); addRow.appendChild(btn);
+    wrap.appendChild(addRow);
+    return wrap;
+  }
+
+  /* ================= 供应商自助入库 ================= */
+  function showOnboard() {
+    $("appShell").style.display = "none";
+    var ob = $("onboardPage");
+    ob.hidden = false;
+    var box = $("onboardBox");
+    box.innerHTML = "";
+
+    var brand = el("div", "onboard-brand");
+    var lm = el("div", "logo-mark", config.logoMark || "供");
+    lm.style.background = config.primaryColor;
+    brand.appendChild(lm);
+    brand.appendChild(el("h1", "", config.siteName));
+    box.appendChild(brand);
+    box.appendChild(el("div", "onboard-desc", "供应商入库登记 · 请如实填写以下信息，标 * 为必填项。"));
+
+    var form = supplierForm(null, true);
+    box.appendChild(form.node);
+
+    var foot = el("div"); foot.style.cssText = "margin-top:20px;display:flex;gap:10px;";
+    var submit = el("button", "btn btn-primary", "提交入库申请");
+    submit.style.flex = "1";
+    submit.addEventListener("click", function () {
+      var data = form.collect();
+      if (!data.name) { toast("请填写供应商名称"); return; }
+      if (!data.category) { toast("请选择供应商分类"); return; }
+      var ns = Object.assign({ id: uid(), statusOverride: null, createdAt: todayStr() }, data);
+      suppliers.push(ns);
+      contracts.push({ id: uid(), supplierId: ns.id, signed: "否", supplierParty: "", ourParty: "", startDate: "", endDate: "", createdAt: todayStr() });
+      saveSuppliers(); saveContracts();
+      box.innerHTML = "";
+      var done = el("div", "onboard-done");
+      done.appendChild(el("div", "big", "✅"));
+      done.appendChild(el("h2", "", "提交成功"));
+      done.appendChild(el("p", "muted", "您的入库申请已提交，我们会在审核后与您联系。"));
+      box.appendChild(done);
+    });
+    foot.appendChild(submit);
+    box.appendChild(foot);
+  }
+  function hideOnboard() {
+    $("onboardPage").hidden = true;
+    $("appShell").style.display = "";
+  }
+
+  /* ================= 全局搜索 ================= */
+  function initSearch() {
+    var inp = $("globalSearch"), res = $("searchResults");
+    inp.addEventListener("input", function () {
+      var kw = inp.value.trim();
+      if (!kw) { res.classList.remove("show"); res.innerHTML = ""; return; }
+      var lkw = kw.toLowerCase();
+      var hitDemands = demands.filter(function (d) {
+        return (d.name + " " + (d.project || "") + " " + supplierName(d.supplierId) + " " + (d.module || "") + " " + (d.demander || "")).toLowerCase().indexOf(lkw) >= 0;
+      }).slice(0, 6);
+      var hitSuppliers = suppliers.filter(function (s) {
+        return (s.name + " " + (s.category || "")).toLowerCase().indexOf(lkw) >= 0;
+      }).slice(0, 5);
+
+      res.innerHTML = "";
+      if (!hitDemands.length && !hitSuppliers.length) {
+        res.innerHTML = '<div class="search-item muted">无匹配结果</div>';
+      } else {
+        if (hitDemands.length) {
+          res.appendChild(el("div", "search-group", "需求单"));
+          hitDemands.forEach(function (d) {
+            var item = el("div", "search-item");
+            item.appendChild(el("span", "", d.name));
+            item.appendChild(el("span", "si-sub", d.project + " · " + supplierName(d.supplierId)));
+            item.addEventListener("click", function () { res.classList.remove("show"); inp.value = ""; moduleState.dispatch.search = d.name; location.hash = "#/dispatch"; });
+            res.appendChild(item);
+          });
+        }
+        if (hitSuppliers.length) {
+          res.appendChild(el("div", "search-group", "供应商"));
+          hitSuppliers.forEach(function (s) {
+            var item = el("div", "search-item");
+            item.appendChild(el("span", "", s.name));
+            item.appendChild(el("span", "si-sub", s.category || ""));
+            item.addEventListener("click", function () { res.classList.remove("show"); inp.value = ""; moduleState.suppliers.search = s.name; location.hash = "#/suppliers"; });
+            res.appendChild(item);
+          });
+        }
+      }
+      res.classList.add("show");
+    });
+    document.addEventListener("click", function (e) {
+      if (!inp.contains(e.target) && !res.contains(e.target)) { res.classList.remove("show"); }
+    });
+  }
+
+  /* ================= 路由 ================= */
+  var ROUTES = {
+    dashboard: { title: "工作台", render: renderDashboard },
+    suppliers: { title: "供应商库", render: renderSuppliers },
+    dispatch: { title: "发包管理", render: renderDispatch },
+    contracts: { title: "合同管理", render: renderContracts },
+    settlement: { title: "结算", render: renderSettlement },
+    analytics: { title: "数据分析", render: renderAnalytics },
+    settings: { title: "系统设置", render: renderSettings }
+  };
+
+  function routeAndQuery() {
+    var h = location.hash || "";
+    var parts = h.replace(/^#\/?/, "").split("?");
+    return { route: parts[0] || "dashboard", query: parts[1] || "" };
+  }
+  function setActiveNav(route) {
+    Array.prototype.slice.call(document.querySelectorAll(".nav-item")).forEach(function (item) {
+      item.classList.toggle("active", item.dataset.route === route);
+    });
+  }
+  function currentTitle() {
+    var r = routeAndQuery().route;
+    var t = ROUTES[r] ? ROUTES[r].title : "工作台";
+    return t + " · " + config.siteName;
+  }
+  function render() {
+    var rq = routeAndQuery();
+    var route = rq.route;
+    if (route === "onboard") { showOnboard(); return; }
+    hideOnboard();
+    var valid = ROUTES[route] ? route : "dashboard";
+    setActiveNav(valid);
+    $("breadcrumb").textContent = ROUTES[valid].title;
+    document.title = ROUTES[valid].title + " · " + config.siteName;
+    ROUTES[valid].render(rq.query);
+    $("pageContainer").scrollTop = 0;
+  }
+
+  /* ================= 身份切换 ================= */
+  function buildUserSelect() {
+    var sel = $("currentUserSelect");
+    sel.innerHTML = '<option value="管理员">管理员</option>' + config.members.map(function (m) { return '<option value="' + esc(m) + '">' + esc(m) + "</option>"; }).join("");
+    sel.value = config.currentUser || "管理员";
+  }
+  $("currentUserSelect").addEventListener("change", function () {
+    config.currentUser = $("currentUserSelect").value;
+    saveConfig(); render(); toast("已切换身份为「" + config.currentUser + "」");
   });
 
-  // ---- 初始化 ----
+  /* ================= 初始化 ================= */
+  var menuToggle = $("menuToggle");
+  menuToggle.addEventListener("click", function () { $("sidebar").classList.toggle("collapsed"); });
+  window.addEventListener("hashchange", render);
+
   buildDesignerUI();
   applyDesign();
-
-  if (!window.location.hash) {
-    window.location.hash = "#/" + DEFAULT_ROUTE;
-  }
+  buildUserSelect();
+  initSearch();
+  if (!location.hash) location.hash = "#/dashboard";
+  render();
 })();
