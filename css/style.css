@@ -500,3 +500,78 @@ body[data-theme="dark"] .badge.orange { background: #3a2a16; color: #ffb46a; }
 body[data-theme="dark"] .badge.purple { background: #2a2144; color: #b39bff; }
 body[data-theme="dark"] .hint.warn { background: #2a2214; color: #f0c078; }
 body[data-theme="dark"] .star { color: #3a4454; }
+
+/* ---------- 登录页 ---------- */
+.login-page {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(47,107,255,.10), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(0,180,160,.08), transparent 60%),
+    var(--bg);
+  padding: 20px;
+}
+.login-card {
+  width: 100%; max-width: 380px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px 28px;
+  box-shadow: 0 18px 50px rgba(15, 30, 60, .14);
+}
+.login-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.login-brand .logo-mark { width: 42px; height: 42px; border-radius: 10px; font-size: 20px; }
+.login-brand h1 { font-size: 20px; font-weight: 700; color: var(--text); }
+.login-desc { font-size: 13px; color: var(--text-secondary); margin-bottom: 22px; }
+.login-field { display: block; margin-bottom: 14px; }
+.login-field > span { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+.login-field input {
+  width: 100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg); color: var(--text); font-size: 14px; outline: none;
+}
+.login-field input:focus { border-color: var(--primary); background: var(--surface); }
+.otp-row { display: flex; gap: 10px; }
+.otp-row input { flex: 1; }
+.otp-row .btn { flex-shrink: 0; padding: 0 14px; }
+.login-submit { width: 100%; padding: 12px; font-size: 15px; margin-top: 4px; }
+.login-divider {
+  display: flex; align-items: center; gap: 12px;
+  color: var(--text-secondary); font-size: 12px; margin: 18px 0;
+}
+.login-divider::before, .login-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.btn-wechat {
+  width: 100%; padding: 12px; font-size: 14px; font-weight: 600; cursor: pointer;
+  border: 1px solid transparent; border-radius: 10px;
+  background: #07c160; color: #fff;
+}
+.btn-wechat:hover { background: #06ad56; }
+.login-error { min-height: 20px; margin-top: 12px; font-size: 13px; color: #e5484d; text-align: center; }
+.login-foot { margin-top: 18px; font-size: 11px; color: var(--text-secondary); text-align: center; }
+
+/* ---------- 顶栏用户信息 ---------- */
+.user-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 999px;
+  background: var(--primary-soft); color: var(--primary);
+  font-size: 13px; font-weight: 600; white-space: nowrap;
+}
+.user-chip:not(.online) { background: var(--bg); color: var(--text-secondary); font-weight: 400; }
+
+/* ---------- 待审核入库申请 ---------- */
+.pending-box {
+  border: 1px solid var(--primary);
+  background: var(--primary-soft);
+  border-radius: 12px; padding: 12px 14px; margin-bottom: 14px;
+}
+.pending-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+.pending-title { font-weight: 700; font-size: 14px; color: var(--primary); }
+.pending-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 14px; margin-top: 8px;
+}
+.pending-info { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.pending-acts { display: flex; gap: 8px; flex-shrink: 0; }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+body[data-theme="dark"] .pending-box { background: rgba(47,107,255,.10); }
+body[data-theme="dark"] .pending-row { background: #151c25; }
