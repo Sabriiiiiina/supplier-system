@@ -84,36 +84,149 @@
     widgets: "spm_widgets_v1"
   };
 
-  /* ================= 数据层 ================= */
-  function load(key, def) {
+  /* ================= 云服务配置 ================= */
+  var CLOUD_CONFIG = {
+    endpoint: "https://supplier-system-63852.app.workbuddy.host",
+    oauthRelayBaseUrl: "https://www.workbuddy.cn/v2/as/genie-baas/oauth",
+    publishableKey: "wbpk_UMoGSCv5mTQ3E6OUdsm2PE_ASkqHCufzge9Z3WxiWtWkT0GQvf9xZkq"
+  };
+  var cloud = null;
+  var session = null;
+  var cacheMeta = {};       // key -> 云端 updated_at（本地已知的最新值）
+  var pendingSaves = {};    // key -> 待写入值
+  var saveTimers = {};      // key -> 防抖定时器
+  var syncTimer = null;
+  var onboardApps = [];     // 待审核的自助入库申请
+
+  /* ================= 数据层（云端共享 + 本地迁移源） ================= */
+  function loadLocal(key, def) {
     try { var r = localStorage.getItem(key); if (r) return JSON.parse(r); } catch (e) {}
     return def;
   }
-  function save(key, val) {
-    try { localStorage.setItem(key, JSON.stringify(val)); }
-    catch (e) { toast("保存失败：本地存储空间不足（附件过多）"); }
+  function hasLocalData() {
+    return [KEYS.config, KEYS.suppliers, KEYS.demands, KEYS.contracts, KEYS.widgets].some(function (k) {
+      return localStorage.getItem(k) != null;
+    });
   }
 
-  var config = load(KEYS.config, {});
-  (function mergeConfig() {
+  function cloudLoad(key, def) {
+    return cloud.database.from("spm_state").select("data, updated_at").eq("key", key).maybeSingle()
+      .then(function (res) {
+        if (res.error) throw res.error;
+        if (!res.data) return { value: def, meta: null };
+        cacheMeta[key] = res.data.updated_at;
+        return { value: res.data.data == null ? def : res.data.data, meta: res.data.updated_at };
+      });
+  }
+
+  function debouncePersist(key) {
+    if (saveTimers[key]) clearTimeout(saveTimers[key]);
+    saveTimers[key] = setTimeout(function () {
+      var val = pendingSaves[key];
+      delete pendingSaves[key];
+      delete saveTimers[key];
+      persistNow(key, val);
+    }, 600);
+  }
+
+  function persistNow(key, val) {
+    if (!cloud) return;
+    cloud.database.from("spm_state")
+      .upsert({ key: key, data: val == null ? {} : val, updated_at: new Date().toISOString() })
+      .select("updated_at")
+      .then(function (res) {
+        if (res.error) { toast("保存失败：" + (res.error.message || "云端异常")); return; }
+        if (res.data && res.data[0]) cacheMeta[key] = res.data[0].updated_at;
+      })
+      .catch(function () { toast("保存失败：网络异常，请稍后重试"); });
+  }
+
+  function save(key, val) {
+    pendingSaves[key] = val;
+    debouncePersist(key);
+  }
+
+  /* ================= 应用状态 ================= */
+  var config = loadLocal(KEYS.config, {});
+  function mergeConfig() {
     var d = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
     for (var k in d) { if (config[k] === undefined) config[k] = d[k]; }
-  })();
+  }
+  mergeConfig();
 
-  var suppliers = load(KEYS.suppliers, []);
-  var demands = load(KEYS.demands, []);
-  var contracts = load(KEYS.contracts, []);
-  var widgets = load(KEYS.widgets, null);
+  var suppliers = loadLocal(KEYS.suppliers, []);
+  var demands = loadLocal(KEYS.demands, []);
+  var contracts = loadLocal(KEYS.contracts, []);
+  var widgets = loadLocal(KEYS.widgets, null);
 
-  // 数据迁移：为历史需求单补全 settlement 子结构
-  demands.forEach(function (d) {
-    if (!d.settlement) d.settlement = { completion: 0, settleFiles: [], invoiceFiles: [], confirmed: false };
-    if (!d.attr) d.attr = "正式需求";
-    if (!d.status) d.status = "未开始";
-    if (d.quoteCurrency === undefined) d.quoteCurrency = "RMB";
-  });
+  function migrateDemands() {
+    // 数据迁移：为历史需求单补全 settlement 子结构
+    demands.forEach(function (d) {
+      if (!d.settlement) d.settlement = { completion: 0, settleFiles: [], invoiceFiles: [], confirmed: false };
+      if (!d.attr) d.attr = "正式需求";
+      if (!d.status) d.status = "未开始";
+      if (d.quoteCurrency === undefined) d.quoteCurrency = "RMB";
+    });
+  }
+  migrateDemands();
 
-  function saveConfig() { save(KEYS.config, config); }
+  async function loadAllFromCloud() {
+    var r1 = await cloudLoad(KEYS.config, {});
+    var r2 = await cloudLoad(KEYS.suppliers, []);
+    var r3 = await cloudLoad(KEYS.demands, []);
+    var r4 = await cloudLoad(KEYS.contracts, []);
+    var r5 = await cloudLoad(KEYS.widgets, null);
+    config = r1.value || {};
+    mergeConfig();
+    config.currentUser = loadLocal("spm_current_user", "管理员");
+    suppliers = r2.value || [];
+    demands = r3.value || [];
+    contracts = r4.value || [];
+    widgets = r5.value == null ? null : r5.value;
+    migrateDemands();
+  }
+
+  async function migrateLocalToCloud() {
+    var pairs = [
+      [KEYS.config, config],
+      [KEYS.suppliers, suppliers],
+      [KEYS.demands, demands],
+      [KEYS.contracts, contracts],
+      [KEYS.widgets, widgets]
+    ];
+    for (var i = 0; i < pairs.length; i++) {
+      if (localStorage.getItem(pairs[i][0]) != null && pairs[i][1] != null) {
+        await cloud.database.from("spm_state").upsert({
+          key: pairs[i][0], data: pairs[i][1], updated_at: new Date().toISOString()
+        });
+      }
+    }
+  }
+
+  async function enterApp() {
+    var cfgProbe = await cloudLoad(KEYS.config, {});
+    if (cfgProbe.meta === null && hasLocalData()) {
+      // 首次使用云版：把本机旧数据一次性迁移到云端
+      await migrateLocalToCloud();
+    }
+    await loadAllFromCloud();
+
+    buildDesignerUI();
+    applyDesign();
+    buildUserSelect();
+    initSearch();
+    await loadOnboardApps();
+    if (!location.hash) location.hash = "#/dashboard";
+    render();
+    startSync();
+  }
+
+  function saveConfig() {
+    localStorage.setItem("spm_current_user", JSON.stringify(config.currentUser || "管理员"));
+    var c = JSON.parse(JSON.stringify(config));
+    delete c.currentUser;
+    save(KEYS.config, c);
+  }
   function saveSuppliers() { save(KEYS.suppliers, suppliers); }
   function saveDemands() { save(KEYS.demands, demands); }
   function saveContracts() { save(KEYS.contracts, contracts); }
@@ -643,6 +756,37 @@
     var btnLink = el("button", "btn btn-ghost", "🔗 生成入库链接");
     btnLink.addEventListener("click", showOnboardLink);
     c.appendChild(pageHead("供应商库", "管理所有入库供应商及其资质、合作状态", [btnAdd, btnLink]));
+
+    // 待审核入库申请
+    if (onboardApps.length) {
+      var pend = el("div", "pending-box");
+      var pendHead = el("div", "pending-head");
+      pendHead.appendChild(el("span", "pending-title", "📥 待审核入库申请（" + onboardApps.length + "）"));
+      if (isAdmin()) pendHead.appendChild(el("span", "muted", "供应商通过自助链接提交，审核后进入供应商库"));
+      pend.appendChild(pendHead);
+      onboardApps.forEach(function (app) {
+        var row = el("div", "pending-row");
+        var info = el("div", "pending-info");
+        info.appendChild(el("b", "", esc((app.data && app.data.name) || "未命名供应商")));
+        info.appendChild(el("span", "muted",
+          (app.data && app.data.category ? esc(app.data.category) + " · " : "") +
+          (app.data && app.data.type ? esc(app.data.type) + " · " : "") +
+          (app.data && app.data.scale ? esc(app.data.scale) : "未填规模") +
+          " · 提交于 " + String(app.created_at || "").slice(0, 10)));
+        row.appendChild(info);
+        if (isAdmin()) {
+          var acts = el("div", "pending-acts");
+          var ok = el("button", "btn btn-primary btn-sm", "通过入库");
+          ok.addEventListener("click", function () { approveOnboard(app); });
+          var no = el("button", "btn btn-ghost btn-sm", "拒绝");
+          no.addEventListener("click", function () { rejectOnboard(app); });
+          acts.appendChild(ok); acts.appendChild(no);
+          row.appendChild(acts);
+        }
+        pend.appendChild(row);
+      });
+      c.appendChild(pend);
+    }
 
     // 搜索 + 筛选
     var tb = el("div", "toolbar");
@@ -1527,6 +1671,7 @@
   /* ================= 供应商自助入库 ================= */
   function showOnboard() {
     $("appShell").style.display = "none";
+    $("loginPage").hidden = true;
     var ob = $("onboardPage");
     ob.hidden = false;
     var box = $("onboardBox");
@@ -1544,29 +1689,50 @@
     box.appendChild(form.node);
 
     var foot = el("div"); foot.style.cssText = "margin-top:20px;display:flex;gap:10px;";
-    var submit = el("button", "btn btn-primary", "提交入库申请");
+    var submit = el("button", "btn btn-primary", session ? "提交入库" : "提交入库申请");
     submit.style.flex = "1";
-    submit.addEventListener("click", function () {
+    submit.addEventListener("click", async function () {
       var data = form.collect();
       if (!data.name) { toast("请填写供应商名称"); return; }
       if (!data.category) { toast("请选择供应商分类"); return; }
-      var ns = Object.assign({ id: uid(), statusOverride: null, createdAt: todayStr() }, data);
-      suppliers.push(ns);
-      contracts.push({ id: uid(), supplierId: ns.id, signed: "否", supplierParty: "", ourParty: "", startDate: "", endDate: "", createdAt: todayStr() });
-      saveSuppliers(); saveContracts();
-      box.innerHTML = "";
-      var done = el("div", "onboard-done");
-      done.appendChild(el("div", "big", "✅"));
-      done.appendChild(el("h2", "", "提交成功"));
-      done.appendChild(el("p", "muted", "您的入库申请已提交，我们会在审核后与您联系。"));
-      box.appendChild(done);
+      if (session) {
+        // 内部成员提交：直接进入供应商库
+        var ns = Object.assign({ id: uid(), statusOverride: null, createdAt: todayStr() }, data);
+        suppliers.push(ns);
+        contracts.push({ id: uid(), supplierId: ns.id, signed: "否", supplierParty: "", ourParty: "", startDate: "", endDate: "", createdAt: todayStr() });
+        saveSuppliers(); saveContracts();
+        showOnboardDone(box);
+      } else {
+        // 外部供应商提交：进入待审核申请
+        submit.disabled = true;
+        submit.textContent = "提交中…";
+        var res = await cloud.database.from("spm_onboard").insert({ data: data, status: "pending" });
+        if (res.error) {
+          submit.disabled = false;
+          submit.textContent = "提交入库申请";
+          toast("提交失败：" + (res.error.message || "网络异常，请稍后重试"));
+          return;
+        }
+        showOnboardDone(box);
+      }
     });
     foot.appendChild(submit);
     box.appendChild(foot);
   }
+  function showOnboardDone(box) {
+    box.innerHTML = "";
+    var done = el("div", "onboard-done");
+    done.appendChild(el("div", "big", "✅"));
+    done.appendChild(el("h2", "", "提交成功"));
+    done.appendChild(el("p", "muted", session
+      ? "供应商已录入供应商库。"
+      : "您的入库申请已提交，我们会在审核后与您联系。"));
+    box.appendChild(done);
+  }
   function hideOnboard() {
     $("onboardPage").hidden = true;
     $("appShell").style.display = "";
+    if (!session) $("loginPage").hidden = false;
   }
 
   /* ================= 全局搜索 ================= */
@@ -1615,6 +1781,173 @@
     });
   }
 
+  /* ================= 登录与账号 ================= */
+  var otpPending = null;   // { phone, verificationId, isExistingUser }
+  var sendCdTimer = null;
+
+  function showLogin() {
+    $("appShell").style.display = "none";
+    $("onboardPage").hidden = true;
+    $("loginPage").hidden = false;
+    $("loginLogoMark").textContent = config.logoMark || "供";
+    $("loginLogoMark").style.background = config.primaryColor;
+    $("loginSiteName").textContent = config.siteName;
+  }
+  function hideLogin() {
+    $("loginPage").hidden = true;
+    $("appShell").style.display = "";
+  }
+  function setLoginError(msg) { $("loginError").textContent = msg || ""; }
+
+  function bindLoginEvents() {
+    var phone = $("loginPhone");
+    phone.addEventListener("input", function () { setLoginError(""); });
+    $("loginSendCode").addEventListener("click", async function () {
+      var p = phone.value.trim();
+      if (!/^1\d{10}$/.test(p)) { setLoginError("请输入正确的 11 位手机号"); return; }
+      var btn = $("loginSendCode");
+      btn.disabled = true;
+      var sent = await cloud.auth.sendOtp({ phone: p });
+      if (sent.error) {
+        setLoginError(sent.error.message || "验证码发送失败，请稍后重试");
+        btn.disabled = false;
+        return;
+      }
+      otpPending = { phone: p, verificationId: sent.data.verificationId, isExistingUser: sent.data.isExistingUser };
+      setLoginError("验证码已发送，请查收短信");
+      var n = 60;
+      btn.textContent = n + "s 后重发";
+      clearInterval(sendCdTimer);
+      sendCdTimer = setInterval(function () {
+        n--;
+        if (n <= 0) { clearInterval(sendCdTimer); btn.textContent = "获取验证码"; btn.disabled = false; }
+        else btn.textContent = n + "s 后重发";
+      }, 1000);
+    });
+    $("loginSubmit").addEventListener("click", async function () {
+      var p = phone.value.trim();
+      var code = $("loginCode").value.trim();
+      if (!otpPending || otpPending.phone !== p) { setLoginError("请先获取验证码"); return; }
+      if (!code) { setLoginError("请输入验证码"); return; }
+      var done = await cloud.auth.verifyOtp({
+        phone: otpPending.phone,
+        verificationId: otpPending.verificationId,
+        isExistingUser: otpPending.isExistingUser,
+        token: code
+      });
+      if (done.error) { setLoginError(done.error.message || "验证失败，请重试"); return; }
+      otpPending = null;
+      await afterLogin();
+    });
+    $("loginWechat").addEventListener("click", async function () {
+      setLoginError("");
+      var back = new URL(location.href);
+      back.pathname = "/";
+      back.searchParams.delete("code");
+      back.searchParams.delete("state");
+      back.searchParams.delete("provider");
+      var res = await cloud.auth.signInWithOAuth({ provider: "wechat", redirectTo: back.toString() });
+      if (res.error) { setLoginError(res.error.message || "微信登录暂不可用"); return; }
+      location.assign(res.data.url);
+    });
+  }
+
+  async function restoreAuth() {
+    var url = new URL(location.href);
+    if (!url.searchParams.has("code") && !url.searchParams.has("error")) return;
+    var provider = url.searchParams.get("provider");
+    if (provider !== "wechat" && provider !== "workbuddy") return;
+    var handle = provider === "wechat" ? cloud.auth.handleWechatWebCallback : cloud.auth.handleWorkBuddyCallback;
+    if (typeof handle !== "function") return;
+    var res = await handle.call(cloud.auth);
+    if (res.error) { setLoginError(res.error.message || "登录失败，请重试"); return; }
+    if (res.data) {
+      url.searchParams.delete("code");
+      url.searchParams.delete("state");
+      url.searchParams.delete("provider");
+      history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
+  }
+
+  async function afterLogin() {
+    var s = await cloud.auth.getSession();
+    if (!s.data) { showLogin(); return; }
+    session = s.data;
+    hideLogin();
+    renderUserChip();
+    try {
+      await enterApp();
+    } catch (e) {
+      toast("加载云端数据失败：" + ((e && e.message) || "网络异常"));
+      showLogin();
+    }
+  }
+
+  function renderUserChip() {
+    var chip = $("userChip");
+    if (session && session.user) {
+      chip.textContent = "👤 " + (session.user.name || "用户");
+      chip.classList.add("online");
+    } else {
+      chip.textContent = "未登录";
+      chip.classList.remove("online");
+    }
+    $("logoutBtn").hidden = !session;
+  }
+
+  /* ================= 多人实时同步 ================= */
+  function isBusy() {
+    return $("modalOverlay").classList.contains("show") || $("designPanel").classList.contains("open");
+  }
+  function startSync() {
+    if (syncTimer) clearInterval(syncTimer);
+    syncTimer = setInterval(checkRemote, 15000);
+  }
+  async function checkRemote() {
+    if (!session || isBusy()) return;
+    try {
+      var res = await cloud.database.from("spm_state").select("key, updated_at");
+      if (res.error) return;
+      var changed = false;
+      (res.data || []).forEach(function (r) {
+        if (cacheMeta[r.key] && r.updated_at !== cacheMeta[r.key]) changed = true;
+      });
+      if (changed) {
+        await loadAllFromCloud();
+        applyDesign();
+        buildUserSelect();
+        render();
+        toast("已同步其他成员的更新");
+      }
+      await loadOnboardApps();
+    } catch (e) {}
+  }
+
+  /* ================= 供应商自助入库申请（云端） ================= */
+  async function loadOnboardApps() {
+    if (!session) { onboardApps = []; return; }
+    var res = await cloud.database.from("spm_onboard").select("*")
+      .eq("status", "pending").order("created_at", { ascending: false });
+    onboardApps = res.error ? [] : (res.data || []);
+  }
+  async function approveOnboard(app) {
+    var ns = Object.assign({ id: uid(), statusOverride: null, createdAt: todayStr() }, app.data || {});
+    suppliers.push(ns);
+    contracts.push({ id: uid(), supplierId: ns.id, signed: "否", supplierParty: "", ourParty: "", startDate: "", endDate: "", createdAt: todayStr() });
+    saveSuppliers(); saveContracts();
+    await cloud.database.from("spm_onboard").delete().eq("id", app.id);
+    onboardApps = onboardApps.filter(function (a) { return a.id !== app.id; });
+    render();
+    toast("已审核入库：「" + ns.name + "」");
+  }
+  async function rejectOnboard(app) {
+    var res = await cloud.database.from("spm_onboard").delete().eq("id", app.id);
+    if (res.error) { toast("操作失败：" + (res.error.message || "云端异常")); return; }
+    onboardApps = onboardApps.filter(function (a) { return a.id !== app.id; });
+    render();
+    toast("已拒绝该入库申请");
+  }
+
   /* ================= 路由 ================= */
   var ROUTES = {
     dashboard: { title: "工作台", render: renderDashboard },
@@ -1645,6 +1978,7 @@
     var rq = routeAndQuery();
     var route = rq.route;
     if (route === "onboard") { showOnboard(); return; }
+    if (!session) { showLogin(); return; }
     hideOnboard();
     var valid = ROUTES[route] ? route : "dashboard";
     setActiveNav(valid);
@@ -1669,11 +2003,64 @@
   var menuToggle = $("menuToggle");
   menuToggle.addEventListener("click", function () { $("sidebar").classList.toggle("collapsed"); });
   window.addEventListener("hashchange", render);
+  $("logoutBtn").addEventListener("click", async function () {
+    try { await cloud.auth.signOut(); } catch (e) {}
+    session = null;
+    renderUserChip();
+    $("appShell").style.display = "none";
+    $("loginPage").hidden = false;
+    toast("已退出登录");
+  });
 
-  buildDesignerUI();
-  applyDesign();
-  buildUserSelect();
-  initSearch();
-  if (!location.hash) location.hash = "#/dashboard";
-  render();
+  async function init() {
+    applyTheme();
+    applySiteInfo();
+    if (typeof WorkBuddyCloud === "undefined") {
+      showLogin();
+      setLoginError("云服务组件加载失败，请刷新页面重试");
+      return;
+    }
+    cloud = WorkBuddyCloud.createWorkBuddyCloud({
+      endpoint: CLOUD_CONFIG.endpoint,
+      oauthRelayBaseUrl: CLOUD_CONFIG.oauthRelayBaseUrl,
+      publishableKey: CLOUD_CONFIG.publishableKey
+    });
+    bindLoginEvents();
+    try { await restoreAuth(); } catch (e) {}
+    var s = null;
+    try { s = await cloud.auth.getSession(); } catch (e) {}
+    if (s && s.data) {
+      session = s.data;
+      hideLogin();
+      renderUserChip();
+      try {
+        await enterApp();
+      } catch (e) {
+        var msg = ((e && e.message) || "网络异常") + (e && e.code ? " [" + e.code + "]" : "");
+        toast("加载云端数据失败：" + msg);
+        setLoginError("云端数据加载失败：" + msg + "　请把这段文字反馈给我们以便排查");
+        showLogin();
+      }
+      return;
+    }
+    showLogin();
+  }
+
+  /* 诊断钩子（用于排查登录后渲染/云端请求问题，不影响正常使用） */
+  window.__spmDebug = {
+    enterApp: enterApp,
+    getCloud: function () { return cloud; },
+    setSessionFake: function (u) { session = { user: u || { name: "诊断测试" } }; },
+    getState: function () {
+      return {
+        session: !!session,
+        appShellVisible: $("appShell").style.display !== "none",
+        loginVisible: !$("loginPage").hidden,
+        supplierCount: suppliers.length,
+        demandCount: demands.length
+      };
+    }
+  };
+
+  init();
 })();
