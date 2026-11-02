@@ -575,3 +575,46 @@ body[data-theme="dark"] .star { color: #3a4454; }
 .btn-sm { padding: 6px 12px; font-size: 12px; }
 body[data-theme="dark"] .pending-box { background: rgba(47,107,255,.10); }
 body[data-theme="dark"] .pending-row { background: #151c25; }
+
+/* ---------- 合同分组展示 ---------- */
+.contract-groups { display: flex; flex-direction: column; gap: 14px; }
+.contract-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.contract-group-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.cgh-name { font-weight: 700; font-size: 14px; color: var(--text); }
+.cgh-count {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.contract-group .table-wrap { border: none; border-radius: 0; }
+
+/* ---------- 合同表单：我方主体单选 ---------- */
+.select-with-add select { width: 100%; }
+
+/* ---------- 我方主体自定义添加 ---------- */
+.custom-party-box {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 8px;
+}
+.custom-party-box input {
+  flex: 1; min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg); color: var(--text);
+  font-size: 13px; outline: none;
+}
+.custom-party-box input:focus { border-color: var(--primary); }

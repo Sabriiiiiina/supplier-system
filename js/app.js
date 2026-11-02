@@ -72,6 +72,7 @@
     supplierCategories: ["美术", "素材", "音频", "外派", "本地化"],
     demandCategories: ["角色原画", "场景原画", "角色动画", "场景动画", "角色模型", "场景模型", "图标", "UI"],
     members: ["何捷", "于涛", "黄志鹏", "徐峰", "徐芝芝", "陈宇飞", "王薪清"],
+    ourParties: ["大乐至简科技（北京）有限公司", "天天玩家科技（北京）有限公司", "成都天天玩家科技有限公司", "Happibits"],
     projectGroups: {}, // { 项目: [成员名, ...] }
     currentUser: "管理员"
   };
@@ -613,25 +614,80 @@
   }
 
   /* ================= 合同表单 ================= */
-  function contractForm(c) {
+  function contractForm(c, opts) {
+    opts = opts || {};
+    var isNew = !!opts.isNew;
     var grid = el("div", "form-grid");
-    grid.appendChild(fieldRow("供应商名称", (function () {
+
+    // 供应商：新建时可下拉选择；编辑时锁定显示
+    var supSel = null;
+    if (isNew) {
+      supSel = el("select");
+      supSel.innerHTML = suppliers.map(function (s) {
+        return '<option value="' + s.id + '">' + esc(s.name) + "</option>";
+      }).join("");
+    } else {
       var s = el("input"); s.type = "text"; s.value = supplierName(c.supplierId); s.disabled = true;
-      return s;
-    })()));
-    grid.appendChild(fieldRow("是否签署合同", makeRadio("signed", ["是", "否"], c.signed || "否")));
-    grid.appendChild(fieldRow("供应商签约主体", makeInput("text", "supplierParty", c.supplierParty)));
-    grid.appendChild(fieldRow("我方签约主体", makeInput("text", "ourParty", c.ourParty)));
-    grid.appendChild(fieldRow("合同开始日期", makeInput("date", "startDate", c.startDate)));
-    grid.appendChild(fieldRow("合同结束日期", makeInput("date", "endDate", c.endDate)));
+    }
+    grid.appendChild(fieldRow("供应商名称", isNew ? supSel : s, true));
+    grid.appendChild(fieldRow("是否签署合同", makeRadio("signed", ["是", "否"], (c && c.signed) || "否")));
+    grid.appendChild(fieldRow("供应商签约主体", makeInput("text", "supplierParty", c ? c.supplierParty : "")));
+
+    // 我方签约主体：单选 + 可自定义添加选项
+    var ourWrap = el("div", "select-with-add");
+    var ourSel = el("select");
+    var addBox = el("div", "custom-party-box");
+    var addInput = el("input");
+    addInput.type = "text";
+    addInput.placeholder = "输入新的主体名称，如：某某科技有限公司";
+    var addOk = el("button", "btn btn-primary btn-sm", "添加并选中");
+    var addCancel = el("button", "btn btn-ghost btn-sm", "取消");
+    function fillOurSel(selected) {
+      ourSel.innerHTML = config.ourParties.map(function (p) {
+        return '<option value="' + esc(p) + '"' + (p === selected ? " selected" : "") + ">" + esc(p) + "</option>";
+      }).join("") + '<option value="__add__">＋ 添加新主体…</option>';
+    }
+    function hideAddBox() { addBox.hidden = true; addInput.value = ""; }
+    function showAddBox() { addBox.hidden = false; addInput.focus(); }
+    fillOurSel(c ? c.ourParty : "");
+    addBox.hidden = true;
+    ourSel.addEventListener("change", function () {
+      if (ourSel.value === "__add__") showAddBox(); else hideAddBox();
+    });
+    addOk.addEventListener("click", function () {
+      var nm = addInput.value.trim();
+      if (!nm) { toast("请输入主体名称"); return; }
+      if (config.ourParties.indexOf(nm) < 0) {
+        config.ourParties.push(nm);
+        saveConfig();
+      }
+      fillOurSel(nm);
+      hideAddBox();
+      toast("已添加主体「" + nm + "」，并保存到选项");
+    });
+    addCancel.addEventListener("click", function () {
+      hideAddBox();
+      fillOurSel(c ? c.ourParty : "");
+    });
+    addBox.appendChild(addInput);
+    addBox.appendChild(addOk);
+    addBox.appendChild(addCancel);
+    ourWrap.appendChild(ourSel);
+    ourWrap.appendChild(addBox);
+    grid.appendChild(fieldRow("我方签约主体", ourWrap, true));
+
+    grid.appendChild(fieldRow("合同开始日期", makeInput("date", "startDate", c ? c.startDate : "")));
+    grid.appendChild(fieldRow("合同结束日期", makeInput("date", "endDate", c ? c.endDate : "")));
     function collect() {
-      return {
+      var out = {
         signed: getRadio(grid, "signed"),
         supplierParty: grid.querySelector('[data-key="supplierParty"]').value.trim(),
-        ourParty: grid.querySelector('[data-key="ourParty"]').value.trim(),
+        ourParty: ourSel.value === "__add__" ? "" : ourSel.value,
         startDate: grid.querySelector('[data-key="startDate"]').value,
         endDate: grid.querySelector('[data-key="endDate"]').value
       };
+      if (isNew) out.supplierId = supSel.value;
+      return out;
     }
     return { node: grid, collect: collect };
   }
@@ -877,11 +933,8 @@
         if (suppliers.some(function (x) { return x.name === data.name; })) { toast("已存在同名供应商"); return; }
         var ns = Object.assign({ id: uid(), createdAt: todayStr() }, data);
         suppliers.push(ns);
-        // 自动同步到合同管理
-        contracts.push({ id: uid(), supplierId: ns.id, signed: "否", supplierParty: "", ourParty: "", startDate: "", endDate: "", createdAt: todayStr() });
-        saveContracts();
         saveSuppliers();
-        toast("供应商已入库，并已同步到合同管理");
+        toast("供应商已入库，可在合同管理中为其添加合同");
       } else {
         // 重名校验
         if (suppliers.some(function (x) { return x.name === data.name && x.id !== s.id; })) { toast("已存在同名供应商"); return; }
@@ -1134,7 +1187,9 @@
     if (query) { var q = parseQuery(query); for (var k in q) if (k in st) st[k] = q[k]; }
 
     var c = $("pageContainer"); c.innerHTML = "";
-    c.appendChild(pageHead("合同管理", "合同台账；新增供应商会自动同步生成一条合同记录", []));
+    var btnAdd = el("button", "btn btn-primary", "＋ 添加合同");
+    btnAdd.addEventListener("click", function () { openContractEditor(null, true); });
+    c.appendChild(pageHead("合同管理", "同一供应商可签署多份合同，按供应商分组展示", [btnAdd]));
 
     var tb = el("div", "toolbar");
     var sb = el("div", "search-box");
@@ -1162,53 +1217,94 @@
     });
 
     if (!list.length) {
-      c.appendChild(emptyBox("▣", "暂无合同记录", "新增供应商后会自动在这里生成对应合同条目。", null));
+      var eBtn = el("button", "btn btn-primary", "＋ 添加第一份合同");
+      eBtn.addEventListener("click", function () { openContractEditor(null, true); });
+      c.appendChild(emptyBox("▣", "暂无合同记录", "点击「添加合同」，为供应商登记合同。", eBtn));
       return;
     }
 
-    var tw = el("div", "table-wrap");
-    var table = el("table", "data-table");
-    var html = "<thead><tr><th>供应商名称</th><th>是否签署合同</th><th>供应商签约主体</th><th>我方签约主体</th><th>合同开始日期</th><th>合同结束日期</th><th>操作</th></tr></thead><tbody>";
-    list.forEach(function (ct) {
-      html += "<tr>";
-      html += "<td><b>" + esc(supplierName(ct.supplierId)) + "</b></td>";
-      html += '<td><select class="cell-select" data-signed="' + ct.id + '"><option value="是"' + (ct.signed === "是" ? " selected" : "") + ">是</option><option value=\"否\"" + (ct.signed === "否" ? " selected" : "") + ">否</option></select></td>";
-      html += "<td>" + esc(ct.supplierParty || "—") + "</td>";
-      html += "<td>" + esc(ct.ourParty || "—") + "</td>";
-      html += "<td>" + esc(ct.startDate || "—") + "</td>";
-      html += "<td>" + esc(ct.endDate || "—") + "</td>";
-      html += '<td><button class="link-btn" data-edit="' + ct.id + '">编辑</button></td>';
-      html += "</tr>";
+    // 按供应商分组
+    var groups = {};
+    list.forEach(function (ct) { (groups[ct.supplierId] = groups[ct.supplierId] || []).push(ct); });
+    var groupIds = Object.keys(groups).sort(function (a, b) {
+      return supplierName(a).localeCompare(supplierName(b), "zh");
     });
-    html += "</tbody>";
-    table.innerHTML = html;
-    tw.appendChild(table);
-    c.appendChild(tw);
 
-    table.querySelectorAll("select[data-signed]").forEach(function (s) {
+    var wrap = el("div", "contract-groups");
+    groupIds.forEach(function (sid) {
+      var gcts = groups[sid];
+      var g = el("div", "contract-group");
+      var gh = el("div", "contract-group-head");
+      var sup = supplierById(sid);
+      gh.appendChild(el("div", "cgh-name", supplierName(sid)));
+      if (sup && sup.category) gh.appendChild(el("span", "tag", sup.category));
+      gh.appendChild(el("span", "cgh-count", gcts.length + " 份合同"));
+      g.appendChild(gh);
+
+      var tw = el("div", "table-wrap");
+      var table = el("table", "data-table");
+      var html = "<thead><tr><th>是否签署</th><th>供应商签约主体</th><th>我方签约主体</th><th>开始日期</th><th>结束日期</th><th>操作</th></tr></thead><tbody>";
+      gcts.forEach(function (ct) {
+        html += "<tr>";
+        html += '<td><select class="cell-select" data-signed="' + ct.id + '"><option value="是"' + (ct.signed === "是" ? " selected" : "") + '>是</option><option value="否"' + (ct.signed === "否" ? " selected" : "") + '>否</option></select></td>';
+        html += "<td>" + esc(ct.supplierParty || "—") + "</td>";
+        html += "<td>" + esc(ct.ourParty || "—") + "</td>";
+        html += "<td>" + esc(ct.startDate || "—") + "</td>";
+        html += "<td>" + esc(ct.endDate || "—") + "</td>";
+        html += '<td><button class="link-btn" data-edit="' + ct.id + '">编辑</button><button class="link-btn danger" data-del="' + ct.id + '">删除</button></td>';
+        html += "</tr>";
+      });
+      html += "</tbody>";
+      table.innerHTML = html;
+      tw.appendChild(table);
+      g.appendChild(tw);
+      wrap.appendChild(g);
+    });
+    c.appendChild(wrap);
+
+    wrap.querySelectorAll("select[data-signed]").forEach(function (s) {
       s.addEventListener("change", function () {
         var ct = contracts.find(function (x) { return x.id === s.dataset.signed; });
         if (ct) { ct.signed = s.value; saveContracts(); toast("已更新签署状态"); }
       });
     });
-    table.querySelectorAll("button[data-edit]").forEach(function (b) {
+    wrap.querySelectorAll("button[data-edit]").forEach(function (b) {
       b.addEventListener("click", function () {
         var ct = contracts.find(function (x) { return x.id === b.dataset.edit; });
-        if (ct) openContractEditor(ct);
+        if (ct) openContractEditor(ct, false);
+      });
+    });
+    wrap.querySelectorAll("button[data-del]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var ct = contracts.find(function (x) { return x.id === b.dataset.del; });
+        if (!ct) return;
+        if (!confirm("确定删除「" + supplierName(ct.supplierId) + "」的这份合同吗？")) return;
+        var idx = contracts.indexOf(ct);
+        if (idx >= 0) contracts.splice(idx, 1);
+        saveContracts(); toast("已删除合同"); renderContracts();
       });
     });
   }
 
-  function openContractEditor(ct) {
-    var form = contractForm(ct);
+  function openContractEditor(ct, isNew) {
+    var form = contractForm(ct, { isNew: isNew });
     var body = el("div"); body.appendChild(form.node);
     var cancel = el("button", "btn btn-ghost", "取消"); cancel.addEventListener("click", closeModal);
     var save = el("button", "btn btn-primary", "保存");
     save.addEventListener("click", function () {
-      Object.assign(ct, form.collect());
-      saveContracts(); closeModal(); toast("已保存"); renderContracts();
+      var data = form.collect();
+      if (!data.ourParty) { toast("请选择我方签约主体"); return; }
+      if (isNew) {
+        if (!data.supplierId) { toast("请选择供应商"); return; }
+        var nct = Object.assign({ id: uid(), createdAt: todayStr() }, data);
+        contracts.push(nct);
+        saveContracts(); closeModal(); toast("合同已添加"); renderContracts();
+      } else {
+        Object.assign(ct, data);
+        saveContracts(); closeModal(); toast("已保存"); renderContracts();
+      }
     });
-    openModal("编辑合同", body, el("div"));
+    openModal(isNew ? "添加合同" : "编辑合同", body, el("div"));
     $("modal").querySelector(".modal-foot").appendChild(cancel); $("modal").querySelector(".modal-foot").appendChild(save);
   }
 
@@ -1699,8 +1795,7 @@
         // 内部成员提交：直接进入供应商库
         var ns = Object.assign({ id: uid(), statusOverride: null, createdAt: todayStr() }, data);
         suppliers.push(ns);
-        contracts.push({ id: uid(), supplierId: ns.id, signed: "否", supplierParty: "", ourParty: "", startDate: "", endDate: "", createdAt: todayStr() });
-        saveSuppliers(); saveContracts();
+        saveSuppliers();
         showOnboardDone(box);
       } else {
         // 外部供应商提交：进入待审核申请
@@ -1933,8 +2028,7 @@
   async function approveOnboard(app) {
     var ns = Object.assign({ id: uid(), statusOverride: null, createdAt: todayStr() }, app.data || {});
     suppliers.push(ns);
-    contracts.push({ id: uid(), supplierId: ns.id, signed: "否", supplierParty: "", ourParty: "", startDate: "", endDate: "", createdAt: todayStr() });
-    saveSuppliers(); saveContracts();
+    saveSuppliers();
     await cloud.database.from("spm_onboard").delete().eq("id", app.id);
     onboardApps = onboardApps.filter(function (a) { return a.id !== app.id; });
     render();
@@ -2051,13 +2145,19 @@
     enterApp: enterApp,
     getCloud: function () { return cloud; },
     setSessionFake: function (u) { session = { user: u || { name: "诊断测试" } }; },
+    seed: function (supArr, conArr) {
+      if (supArr) suppliers = supArr;
+      if (conArr) contracts = conArr;
+    },
+    renderContracts: renderContracts,
     getState: function () {
       return {
         session: !!session,
         appShellVisible: $("appShell").style.display !== "none",
         loginVisible: !$("loginPage").hidden,
         supplierCount: suppliers.length,
-        demandCount: demands.length
+        demandCount: demands.length,
+        contractCount: contracts.length
       };
     }
   };
