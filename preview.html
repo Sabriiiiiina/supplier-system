@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>供应商管理系统 · 离线演示预览</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="js/vendor/workbuddy-cloud-sdk.js"></script>
+</head>
+<body>
+  <!-- 登录页（预览模式下不会显示） -->
+  <div class="login-page" id="loginPage" hidden>
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="logo-mark" id="loginLogoMark">供</div>
+        <h1 id="loginSiteName">供应商管理系统</h1>
+      </div>
+      <p class="login-desc">登录后查看与编辑团队共享的供应商数据</p>
+      <div class="login-form" id="loginForm">
+        <label class="login-field">
+          <span>手机号</span>
+          <input type="tel" id="loginPhone" maxlength="11" placeholder="请输入 11 位手机号" autocomplete="tel" />
+        </label>
+        <label class="login-field">
+          <span>验证码</span>
+          <div class="otp-row">
+            <input type="text" id="loginCode" maxlength="6" placeholder="6 位验证码" autocomplete="one-time-code" />
+            <button type="button" class="btn btn-ghost" id="loginSendCode">获取验证码</button>
+          </div>
+        </label>
+        <button type="button" class="btn btn-primary login-submit" id="loginSubmit">登录 / 注册</button>
+        <div class="login-divider"><span>或</span></div>
+        <button type="button" class="btn btn-wechat" id="loginWechat">微信登录</button>
+        <div class="login-error" id="loginError"></div>
+      </div>
+      <p class="login-foot">登录即表示您同意仅在工作范围内使用本系统数据</p>
+    </div>
+  </div>
+
+  <div class="app" id="appShell">
+    <!-- 侧边栏 -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-mark" id="logo-mark">供</div>
+        <span class="logo-text" id="logo-text">供应商管理系统</span>
+      </div>
+      <nav class="sidebar-nav" id="sidebarNav">
+        <a class="nav-item" href="#/dashboard" data-route="dashboard">
+          <span class="nav-icon">▦</span><span class="nav-label">工作台</span>
+        </a>
+        <a class="nav-item" href="#/suppliers" data-route="suppliers">
+          <span class="nav-icon">▤</span><span class="nav-label">供应商库</span>
+        </a>
+        <a class="nav-item" href="#/dispatch" data-route="dispatch">
+          <span class="nav-icon">⇅</span><span class="nav-label">发包管理</span>
+        </a>
+        <a class="nav-item" href="#/contracts" data-route="contracts">
+          <span class="nav-icon">▣</span><span class="nav-label">合同管理</span>
+        </a>
+        <a class="nav-item" href="#/settlement" data-route="settlement">
+          <span class="nav-icon">¥</span><span class="nav-label">结算</span>
+        </a>
+        <a class="nav-item" href="#/analytics" data-route="analytics">
+          <span class="nav-icon">◔</span><span class="nav-label">数据分析</span>
+        </a>
+        <a class="nav-item" href="#/settings" data-route="settings">
+          <span class="nav-icon">⚙</span><span class="nav-label">系统设置</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <span class="version-tag" id="versionTag">v1.0 · 供应商管理</span>
+      </div>
+    </aside>
+
+    <!-- 主区域 -->
+    <div class="main" id="mainArea">
+      <header class="topbar">
+        <button class="icon-btn" id="menuToggle" title="收起/展开菜单">☰</button>
+        <div class="breadcrumb" id="breadcrumb">工作台</div>
+        <div class="global-search-wrap" id="globalSearchWrap">
+          <input type="search" class="global-search" id="globalSearch" placeholder="全局搜索：需求 / 供应商 / 项目…" autocomplete="off" />
+          <div class="search-results" id="searchResults"></div>
+        </div>
+        <div class="topbar-right">
+          <span class="user-chip" id="userChip" title="当前登录账号">未登录</span>
+          <button class="icon-btn" id="logoutBtn" title="退出登录" hidden>⏻</button>
+          <label class="user-label">当前身份</label>
+          <select class="user-select" id="currentUserSelect" title="切换当前身份（用于权限模拟）"></select>
+          <button class="icon-btn" id="designToggle" title="界面设计器">🎨</button>
+        </div>
+      </header>
+      <main class="content" id="pageContainer"></main>
+    </div>
+  </div>
+
+  <!-- 供应商自助入库页 -->
+  <div class="onboard-page" id="onboardPage" hidden>
+    <div class="onboard-box" id="onboardBox"></div>
+  </div>
+
+  <!-- 通用弹窗 -->
+  <div class="modal-overlay" id="modalOverlay"></div>
+  <div class="modal" id="modal" role="dialog"></div>
+
+  <!-- 界面设计器 -->
+  <div class="design-overlay" id="designOverlay"></div>
+  <aside class="design-panel" id="designPanel">
+    <div class="design-panel-head">
+      <div class="design-panel-title">🎨 界面设计器</div>
+      <button class="icon-btn" id="designClose" title="关闭">✕</button>
+    </div>
+    <div class="design-panel-body">
+      <section class="design-section">
+        <h3 class="design-section-title">站点信息</h3>
+        <label class="design-field">
+          <span>站点标题</span>
+          <input type="text" id="designSiteName" />
+        </label>
+        <label class="design-field">
+          <span>Logo 标识（1–2 个字）</span>
+          <input type="text" id="designLogoMark" maxlength="2" />
+        </label>
+      </section>
+      <section class="design-section">
+        <h3 class="design-section-title">主色调</h3>
+        <div class="color-swatches" id="colorSwatches"></div>
+        <label class="design-field">
+          <span>自定义颜色</span>
+          <input type="color" id="designCustomColor" />
+        </label>
+      </section>
+      <section class="design-section">
+        <h3 class="design-section-title">外观主题</h3>
+        <div class="theme-toggle">
+          <button type="button" class="theme-option" data-theme-choice="light">☀️ 浅色</button>
+          <button type="button" class="theme-option" data-theme-choice="dark">🌙 深色</button>
+        </div>
+      </section>
+    </div>
+    <div class="design-panel-foot">
+      <button class="btn btn-ghost" id="designReset">恢复默认</button>
+      <button class="btn btn-primary" id="designSave">保存设计</button>
+    </div>
+  </aside>
+
+  <script src="js/app.js"></script>
+  <script>
+    /* 离线演示预览：不连接云端，注入演示数据直接渲染（仅本地 preview.html 使用，不影响正式站点） */
+    (function () {
+      var DEMO_SUPPLIERS = [
+        { id: "s1", name: "青柠设计工作室", category: "设计类" },
+        { id: "s2", name: "橙风制作有限公司", category: "制作类" },
+        { id: "s3", name: "蓝湾科技", category: "科技类" }
+      ];
+      var DEMO_CONTRACTS = [
+        { id: "c1", supplierId: "s1", supplierParty: "青柠设计工作室（主体）", ourParty: "天天玩家科技（北京）有限公司", startDate: "2026-01-01", endDate: "2026-06-30", flowStatus: "已归档", files: [{ name: "合同扫描件.pdf", size: 524288 }] },
+        { id: "c2", supplierId: "s1", supplierParty: "青柠设计工作室（主体）", ourParty: "成都天天玩家科技有限公司", startDate: "2026-03-01", endDate: "2026-12-31", flowStatus: "未提审批", files: [] },
+        { id: "c3", supplierId: "s2", supplierParty: "橙风制作（上海）分公司", ourParty: "Happibits", startDate: "2026-02-15", endDate: "2027-02-14", flowStatus: "已邮寄", files: [] },
+        { id: "c4", supplierId: "s2", supplierParty: "橙风制作有限公司", ourParty: "大乐至简科技（北京）有限公司", startDate: "2026-05-01", endDate: "2026-08-31", flowStatus: "已提审批", files: [] },
+        { id: "c5", supplierId: "s3", supplierParty: "蓝湾科技", ourParty: "天天玩家科技（北京）有限公司", startDate: "2026-04-01", endDate: "2026-09-30", flowStatus: "未提审批", files: [] }
+      ];
+
+      var injected = false;
+      function inject() {
+        if (injected) return;
+        var d = window.__spmDebug;
+        if (!d) return;
+        injected = true;
+        d.setSessionFake({ name: "演示预览" });
+        d.seed(DEMO_SUPPLIERS, DEMO_CONTRACTS);
+        var login = document.getElementById("loginPage");
+        login.hidden = true;
+        var shell = document.getElementById("appShell");
+        shell.style.display = "";
+        var chip = document.getElementById("userChip");
+        chip.textContent = "演示预览（离线数据）";
+        var logout = document.getElementById("logoutBtn");
+        logout.hidden = true;
+        d.renderContracts();
+        // 兜底守护：若初始化收尾流程又把登录页显示出来，立即恢复预览视图
+        new MutationObserver(function () {
+          if (login.hidden === false) {
+            login.hidden = true;
+            shell.style.display = "";
+            d.renderContracts();
+          }
+        }).observe(login, { attributes: true, attributeFilter: ["hidden"] });
+      }
+
+      (function attempt() {
+        var d = window.__spmDebug;
+        var login = document.getElementById("loginPage");
+        if (!d || !login) return setTimeout(attempt, 100);
+        // 登录页已显示说明初始化已走到终态，稍等片刻再注入
+        if (!login.hidden) return setTimeout(inject, 500);
+        inject();
+      })();
+    })();
+  </script>
+</body>
+</html>

@@ -1204,7 +1204,7 @@
     var c = $("pageContainer"); c.innerHTML = "";
     var btnAdd = el("button", "btn btn-primary", "＋ 添加合同");
     btnAdd.addEventListener("click", function () { openContractEditor(null, true); });
-    c.appendChild(pageHead("合同管理", "同一供应商可签署多份合同，按供应商分组展示", [btnAdd]));
+    c.appendChild(pageHead("合同管理", "字段标题统一在首行，合同按供应商相邻排列", [btnAdd]));
 
     var tb = el("div", "toolbar");
     var sb = el("div", "search-box");
@@ -1238,47 +1238,55 @@
       return;
     }
 
-    // 按供应商分组
-    var groups = {};
-    list.forEach(function (ct) { (groups[ct.supplierId] = groups[ct.supplierId] || []).push(ct); });
-    var groupIds = Object.keys(groups).sort(function (a, b) {
-      return supplierName(a).localeCompare(supplierName(b), "zh");
+    // 按供应商分组排序；表头统一在首行，每份合同占一行竖向展示
+    var sorted = list.slice().sort(function (a, b) {
+      var na = supplierName(a.supplierId).localeCompare(supplierName(b.supplierId), "zh");
+      if (na !== 0) return na;
+      return (a.startDate || "").localeCompare(b.startDate || "");
     });
 
-    var wrap = el("div", "contract-groups");
-    groupIds.forEach(function (sid) {
-      var gcts = groups[sid];
-      var g = el("div", "contract-group");
-      var gh = el("div", "contract-group-head");
-      var sup = supplierById(sid);
-      gh.appendChild(el("div", "cgh-name", supplierName(sid)));
-      if (sup && sup.category) gh.appendChild(el("span", "tag", sup.category));
-      gh.appendChild(el("span", "cgh-count", gcts.length + " 份合同"));
-      g.appendChild(gh);
-
-      var tw = el("div", "table-wrap");
-      var table = el("table", "data-table");
-      var html = "<thead><tr><th>流转状态</th><th>供应商签约主体</th><th>我方签约主体</th><th>开始日期</th><th>结束日期</th><th>附件</th><th>操作</th></tr></thead><tbody>";
-      gcts.forEach(function (ct) {
-        var fidx = FLOW_STEPS.indexOf(ct.flowStatus || "未提审批");
-        if (fidx < 0) fidx = 0;
-        var isDone = fidx >= FLOW_STEPS.length - 1;
-        html += "<tr>";
-        html += '<td><button class="flow-btn f-' + fidx + '" data-flow="' + ct.id + '"' + (isDone ? " disabled" : "") + ">" + FLOW_STEPS[fidx] + (isDone ? " ✓" : " →") + "</button></td>";
-        html += "<td>" + esc(ct.supplierParty || "—") + "</td>";
-        html += "<td>" + esc(ct.ourParty || "—") + "</td>";
-        html += "<td>" + esc(ct.startDate || "—") + "</td>";
-        html += "<td>" + esc(ct.endDate || "—") + "</td>";
-        html += "<td>" + ((ct.files || []).length ? '<button class="file-chip" data-files="' + ct.id + '">📎 ' + ct.files.length + " 个</button>" : '<button class="link-btn" data-files="' + ct.id + '">上传</button>') + "</td>";
-        html += '<td><button class="link-btn" data-edit="' + ct.id + '">编辑</button><button class="link-btn danger" data-del="' + ct.id + '">删除</button></td>';
-        html += "</tr>";
-      });
-      html += "</tbody>";
-      table.innerHTML = html;
-      tw.appendChild(table);
-      g.appendChild(tw);
-      wrap.appendChild(g);
+    // 统计每个供应商的合同数量（用于首列合并单元格）
+    var runs = [];
+    var lastSid = null;
+    sorted.forEach(function (ct) {
+      if (ct.supplierId !== lastSid) {
+        runs.push({ sid: ct.supplierId, count: 0 });
+        lastSid = ct.supplierId;
+      }
+      runs[runs.length - 1].count++;
     });
+
+    function flowBtnHtml(ct) {
+      var fidx = FLOW_STEPS.indexOf(ct.flowStatus || "未提审批");
+      if (fidx < 0) fidx = 0;
+      var isDone = fidx >= FLOW_STEPS.length - 1;
+      return '<button class="flow-btn f-' + fidx + '" data-flow="' + ct.id + '"' + (isDone ? " disabled" : "") + ">" + FLOW_STEPS[fidx] + (isDone ? " ✓" : " →") + "</button>";
+    }
+
+    var html = '<table class="data-table contracts-table"><thead><tr><th>供应商</th><th>流转状态</th><th>供应商签约主体</th><th>我方签约主体</th><th>开始日期</th><th>结束日期</th><th>附件</th><th>操作</th></tr></thead><tbody>';
+    lastSid = null;
+    var runIdx = -1;
+    sorted.forEach(function (ct) {
+      var isFirst = ct.supplierId !== lastSid;
+      if (isFirst) { lastSid = ct.supplierId; runIdx++; }
+      html += isFirst ? '<tr class="ct-group-start">' : "<tr>";
+      if (isFirst) {
+        var r = runs[runIdx];
+        html += '<td rowspan="' + r.count + '" class="ct-sup-cell"><div class="ct-sup-name">' + esc(supplierName(r.sid)) + '</div><div class="ct-sup-count">共 ' + r.count + " 份</div></td>";
+      }
+      html += "<td>" + flowBtnHtml(ct) + "</td>";
+      html += "<td>" + esc(ct.supplierParty || "—") + "</td>";
+      html += "<td>" + esc(ct.ourParty || "—") + "</td>";
+      html += "<td>" + esc(ct.startDate || "—") + "</td>";
+      html += "<td>" + esc(ct.endDate || "—") + "</td>";
+      html += "<td>" + ((ct.files || []).length ? '<button class="file-chip" data-files="' + ct.id + '">📎 ' + ct.files.length + " 个</button>" : '<button class="link-btn" data-files="' + ct.id + '">上传</button>') + "</td>";
+      html += '<td><button class="link-btn" data-edit="' + ct.id + '">编辑</button><button class="link-btn danger" data-del="' + ct.id + '">删除</button></td>';
+      html += "</tr>";
+    });
+    html += "</tbody></table>";
+
+    var wrap = el("div", "table-wrap");
+    wrap.innerHTML = html;
     c.appendChild(wrap);
 
     wrap.querySelectorAll("button[data-flow]").forEach(function (b) {

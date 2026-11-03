@@ -3,6 +3,7 @@
   --bg: #f5f7fa;
   --surface: #ffffff;
   --border: #e5e9f0;
+  --border-strong: #c9d3e0;
   --text: #1f2d3d;
   --text-secondary: #6b7a90;
   --primary: #2f6bff;
@@ -486,6 +487,7 @@ body[data-theme="dark"] {
   --bg: #0f1419;
   --surface: #1a212b;
   --border: #2a3442;
+  --border-strong: #46546a;
   --text: #e6ebf2;
   --text-secondary: #8b98a8;
 }
@@ -576,30 +578,21 @@ body[data-theme="dark"] .star { color: #3a4454; }
 body[data-theme="dark"] .pending-box { background: rgba(47,107,255,.10); }
 body[data-theme="dark"] .pending-row { background: #151c25; }
 
-/* ---------- 合同分组展示 ---------- */
-.contract-groups { display: flex; flex-direction: column; gap: 14px; }
-.contract-group {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  overflow: hidden;
-}
-.contract-group-head {
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 16px;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
-}
-.cgh-name { font-weight: 700; font-size: 14px; color: var(--text); }
-.cgh-count {
-  margin-left: auto;
-  font-size: 12px;
-  padding: 3px 10px;
-  border-radius: 999px;
+/* ---------- 合同表：表头统一首行，供应商成组竖排 ---------- */
+.contracts-table th, .contracts-table td { white-space: nowrap; }
+.contracts-table td.ct-sup-cell {
+  text-align: left;
+  vertical-align: middle;
   background: var(--primary-soft);
-  color: var(--primary);
+  border-right: 1px solid var(--border);
+  min-width: 130px;
 }
-.contract-group .table-wrap { border: none; border-radius: 0; }
+.ct-sup-name { font-weight: 700; color: var(--text); font-size: 13px; white-space: nowrap; }
+.ct-sup-count { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+/* 不同供应商之间加粗分隔线 */
+.contracts-table tbody tr.ct-group-start td { border-top: 2px solid var(--border-strong); }
+.contracts-table tbody tr:first-child.ct-group-start td { border-top: none; }
+body[data-theme="dark"] .contracts-table td.ct-sup-cell { background: rgba(47,107,255,.12); }
 
 /* ---------- 合同表单：我方主体单选 ---------- */
 .select-with-add select { width: 100%; }
