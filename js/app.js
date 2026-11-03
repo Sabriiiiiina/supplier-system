@@ -1104,7 +1104,7 @@
         html += "<td>" + (d.testResult ? (d.testResult === "测试通过" ? '<span class="badge green">测试通过</span>' : '<span class="badge red">测试未通过</span>') + (d.testComment ? '<div class="cell-sub">' + esc(d.testComment) + "</div>" : "") : '<span class="muted">—</span>') + "</td>";
         html += "<td>" + (d.rating ? '<span class="stars" style="color:#f5a623">' + starStr(d.rating) + "</span>" : '<span class="muted">—</span>') + "</td>";
         html += '<td title="' + esc(d.note || "") + '">' + esc((d.note || "").slice(0, 12) || "—") + "</td>";
-        html += '<td><div class="row-actions"><button class="link-btn" data-edit="' + d.id + '">编辑</button></div></td>';
+        html += '<td><div class="row-actions"><button class="link-btn" data-edit="' + d.id + '">编辑</button><button class="link-btn danger" data-del="' + d.id + '">删除</button></div></td>';
         html += "</tr>";
       });
       return html;
@@ -1150,6 +1150,18 @@
       b.addEventListener("click", function () {
         var d = demands.find(function (x) { return x.id === b.dataset.edit; });
         if (d) openDemandEditor(d);
+      });
+    });
+    table.querySelectorAll("button[data-del]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var d = demands.find(function (x) { return x.id === b.dataset.del; });
+        if (!d) return;
+        if (!confirm("确定删除需求「" + (d.name || "") + "」吗？删除后不可恢复，对应的结算记录也会一并删除。")) return;
+        var idx = demands.indexOf(d);
+        if (idx >= 0) demands.splice(idx, 1);
+        saveDemands();
+        toast("需求已删除");
+        renderDispatch();
       });
     });
   }
@@ -2261,9 +2273,10 @@
     enterApp: enterApp,
     getCloud: function () { return cloud; },
     setSessionFake: function (u) { session = { user: u || { name: "诊断测试" } }; },
-    seed: function (supArr, conArr) {
+    seed: function (supArr, conArr, dmArr) {
       if (supArr) suppliers = supArr;
       if (conArr) contracts = conArr;
+      if (dmArr) demands = dmArr;
     },
     renderContracts: renderContracts,
     getState: function () {
