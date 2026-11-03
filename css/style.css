@@ -344,6 +344,10 @@ a { color: inherit; }
   display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0;
 }
 
+/* ---------- 居中确认弹窗 ---------- */
+.confirm-dialog { text-align: center; padding: 6px 0; }
+.confirm-text { font-size: 14px; color: var(--text); line-height: 1.6; }
+
 /* ---------- 空状态 ---------- */
 .empty-state { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
 .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: .5; }

@@ -372,10 +372,11 @@
   });
   designSave.addEventListener("click", function () { saveConfig(); closeDesigner(); toast("已保存设计"); });
   designReset.addEventListener("click", function () {
-    if (!window.confirm("确定恢复默认设计？当前自定义内容将丢失。")) return;
-    var keep = { siteName: DEFAULT_CONFIG.siteName, logoMark: DEFAULT_CONFIG.logoMark, primaryColor: DEFAULT_CONFIG.primaryColor, theme: "light" };
-    for (var k in keep) config[k] = keep[k];
-    saveConfig(); buildDesignerUI(); fillDesignerInputs(); applyDesign(); toast("已恢复默认");
+    confirmDialog("恢复确认", "确定恢复默认设计吗？", function () {
+      var keep = { siteName: DEFAULT_CONFIG.siteName, logoMark: DEFAULT_CONFIG.logoMark, primaryColor: DEFAULT_CONFIG.primaryColor, theme: "light" };
+      for (var k in keep) config[k] = keep[k];
+      saveConfig(); buildDesignerUI(); fillDesignerInputs(); applyDesign(); toast("已恢复默认");
+    }, "确定", "btn btn-primary");
   });
 
   /* ================= 弹窗 ================= */
@@ -395,6 +396,19 @@
   }
   function closeModal() { $("modalOverlay").classList.remove("show"); $("modal").classList.remove("open"); }
   $("modalOverlay").addEventListener("click", closeModal);
+
+  /* 居中确认弹窗（替代浏览器原生 confirm） */
+  function confirmDialog(title, msg, onYes, okText, okClass) {
+    var body = el("div", "confirm-dialog");
+    body.appendChild(el("div", "confirm-text", msg));
+    var foot = el("div");
+    var cancel = el("button", "btn btn-ghost", "取消");
+    cancel.addEventListener("click", closeModal);
+    var ok = el("button", okClass || "btn btn-danger", okText || "确定删除");
+    ok.addEventListener("click", function () { closeModal(); if (onYes) onYes(); });
+    foot.appendChild(cancel); foot.appendChild(ok);
+    openModal(title || "删除确认", body, foot, true);
+  }
 
   /* ================= 表单构建助手 ================= */
   function fieldRow(labelText, control, required, full) {
@@ -970,10 +984,11 @@
       toast("该供应商已关联 " + linkedDemands + " 条需求、 " + linkedContracts + " 条合同，无法删除（请先解除关联）");
       return;
     }
-    if (!window.confirm("确定删除供应商「" + s.name + "」？")) return;
-    suppliers = suppliers.filter(function (x) { return x.id !== s.id; });
-    contracts = contracts.filter(function (c) { return c.supplierId !== s.id; });
-    saveSuppliers(); saveContracts(); renderSuppliers(); toast("已删除");
+    confirmDialog("删除确认", "确定删除该供应商吗？", function () {
+      suppliers = suppliers.filter(function (x) { return x.id !== s.id; });
+      contracts = contracts.filter(function (c) { return c.supplierId !== s.id; });
+      saveSuppliers(); saveContracts(); renderSuppliers(); toast("已删除");
+    });
   }
 
   function showOnboardLink() {
@@ -1156,12 +1171,13 @@
       b.addEventListener("click", function () {
         var d = demands.find(function (x) { return x.id === b.dataset.del; });
         if (!d) return;
-        if (!confirm("确定删除需求「" + (d.name || "") + "」吗？删除后不可恢复，对应的结算记录也会一并删除。")) return;
-        var idx = demands.indexOf(d);
-        if (idx >= 0) demands.splice(idx, 1);
-        saveDemands();
-        toast("需求已删除");
-        renderDispatch();
+        confirmDialog("删除确认", "确定删除该需求吗？", function () {
+          var idx = demands.indexOf(d);
+          if (idx >= 0) demands.splice(idx, 1);
+          saveDemands();
+          toast("需求已删除");
+          renderDispatch();
+        });
       });
     });
   }
@@ -1323,10 +1339,11 @@
       b.addEventListener("click", function () {
         var ct = contracts.find(function (x) { return x.id === b.dataset.del; });
         if (!ct) return;
-        if (!confirm("确定删除「" + supplierName(ct.supplierId) + "」的这份合同吗？")) return;
-        var idx = contracts.indexOf(ct);
-        if (idx >= 0) contracts.splice(idx, 1);
-        saveContracts(); toast("已删除合同"); renderContracts();
+        confirmDialog("删除确认", "确定删除该合同吗？", function () {
+          var idx = contracts.indexOf(ct);
+          if (idx >= 0) contracts.splice(idx, 1);
+          saveContracts(); toast("已删除合同"); renderContracts();
+        });
       });
     });
   }
@@ -1353,11 +1370,12 @@
       });
       var del = el("button", "link-btn danger", "删除");
       del.addEventListener("click", function () {
-        if (!confirm("确定删除附件「" + (f.name || "") + "」吗？")) return;
-        ct.files.splice(idx, 1);
-        saveContracts();
-        rebuild();
-        toast("附件已删除");
+        confirmDialog("删除确认", "确定删除该附件吗？", function () {
+          ct.files.splice(idx, 1);
+          saveContracts();
+          rebuild();
+          toast("附件已删除");
+        });
       });
       acts.appendChild(dl); acts.appendChild(del);
       row.appendChild(icon); row.appendChild(info); row.appendChild(acts);
@@ -1557,9 +1575,10 @@
 
   function doConfirm(d) {
     if (d.settlement.confirmed) { toast("已结算，不可重复操作"); return; }
-    if (!window.confirm("确认结算「" + d.name + "」？确认后不可撤销。")) return;
-    d.settlement.confirmed = true; d.settlement.confirmedAt = todayStr();
-    saveDemands(); renderSettlement(); toast("已确认结算");
+    confirmDialog("结算确认", "确定确认结算吗？", function () {
+      d.settlement.confirmed = true; d.settlement.confirmedAt = todayStr();
+      saveDemands(); renderSettlement(); toast("已确认结算");
+    }, "确认结算", "btn btn-primary");
   }
   function batchConfirm() {
     var ids = Array.prototype.slice.call(document.querySelectorAll(".sel-row:checked")).map(function (c) { return c.dataset.id; });
