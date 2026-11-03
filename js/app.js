@@ -58,6 +58,12 @@
       r.readAsDataURL(f);
     });
   }
+  function fmtSize(n) {
+    n = n || 0;
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+    return (n / 1024 / 1024).toFixed(2) + " MB";
+  }
 
   /* ================= 常量与默认配置 ================= */
   var PRESET_COLORS = ["#2f6bff", "#00b4a0", "#7c5cff", "#22a06b", "#ff7a2f", "#e5484d"];
@@ -176,6 +182,7 @@
   function migrateContracts() {
     contracts.forEach(function (ct) {
       if (!ct.flowStatus || FLOW_STEPS.indexOf(ct.flowStatus) < 0) ct.flowStatus = "未提审批";
+      if (!Array.isArray(ct.files)) ct.files = [];
     });
   }
   migrateContracts();
@@ -1251,7 +1258,7 @@
 
       var tw = el("div", "table-wrap");
       var table = el("table", "data-table");
-      var html = "<thead><tr><th>流转状态</th><th>供应商签约主体</th><th>我方签约主体</th><th>开始日期</th><th>结束日期</th><th>操作</th></tr></thead><tbody>";
+      var html = "<thead><tr><th>流转状态</th><th>供应商签约主体</th><th>我方签约主体</th><th>开始日期</th><th>结束日期</th><th>附件</th><th>操作</th></tr></thead><tbody>";
       gcts.forEach(function (ct) {
         var fidx = FLOW_STEPS.indexOf(ct.flowStatus || "未提审批");
         if (fidx < 0) fidx = 0;
@@ -1262,6 +1269,7 @@
         html += "<td>" + esc(ct.ourParty || "—") + "</td>";
         html += "<td>" + esc(ct.startDate || "—") + "</td>";
         html += "<td>" + esc(ct.endDate || "—") + "</td>";
+        html += "<td>" + ((ct.files || []).length ? '<button class="file-chip" data-files="' + ct.id + '">📎 ' + ct.files.length + " 个</button>" : '<button class="link-btn" data-files="' + ct.id + '">上传</button>') + "</td>";
         html += '<td><button class="link-btn" data-edit="' + ct.id + '">编辑</button><button class="link-btn danger" data-del="' + ct.id + '">删除</button></td>';
         html += "</tr>";
       });
@@ -1277,6 +1285,12 @@
       b.addEventListener("click", function () {
         var ct = contracts.find(function (x) { return x.id === b.dataset.flow; });
         if (ct) advanceContractFlow(ct);
+      });
+    });
+    wrap.querySelectorAll("button[data-files]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var ct = contracts.find(function (x) { return x.id === b.dataset.files; });
+        if (ct) openContractFiles(ct);
       });
     });
     wrap.querySelectorAll("button[data-edit]").forEach(function (b) {
@@ -1295,6 +1309,78 @@
         saveContracts(); toast("已删除合同"); renderContracts();
       });
     });
+  }
+
+  // 合同附件管理：查看/下载/删除/不限数量上传
+  function openContractFiles(ct) {
+    if (!Array.isArray(ct.files)) ct.files = [];
+    var body = el("div");
+    body.appendChild(el("div", "muted", "供应商：" + supplierName(ct.supplierId) + " · 附件数量不限，单个文件不超过 2MB"));
+
+    var listWrap = el("div", "file-manager");
+    function fileRow(f, idx) {
+      var row = el("div", "file-row");
+      var icon = el("div", "file-icon", "📄");
+      var info = el("div", "file-info");
+      info.appendChild(el("div", "file-name", f.name));
+      info.appendChild(el("div", "file-meta", fmtSize(f.size || 0)));
+      var acts = el("div", "file-acts");
+      var dl = el("button", "link-btn", "下载");
+      dl.addEventListener("click", function () {
+        var a = document.createElement("a");
+        a.href = f.dataUrl; a.download = f.name || "附件";
+        document.body.appendChild(a); a.click(); a.remove();
+      });
+      var del = el("button", "link-btn danger", "删除");
+      del.addEventListener("click", function () {
+        if (!confirm("确定删除附件「" + (f.name || "") + "」吗？")) return;
+        ct.files.splice(idx, 1);
+        saveContracts();
+        rebuild();
+        toast("附件已删除");
+      });
+      acts.appendChild(dl); acts.appendChild(del);
+      row.appendChild(icon); row.appendChild(info); row.appendChild(acts);
+      return row;
+    }
+    function rebuild() {
+      listWrap.innerHTML = "";
+      if (!ct.files.length) {
+        listWrap.appendChild(el("div", "file-empty", "暂无附件，点击下方按钮上传"));
+        return;
+      }
+      ct.files.forEach(function (f, idx) { listWrap.appendChild(fileRow(f, idx)); });
+    }
+    rebuild();
+    body.appendChild(listWrap);
+
+    // 隐藏的 file input：支持多选、多次追加
+    var fInput = document.createElement("input");
+    fInput.type = "file"; fInput.multiple = true; fInput.style.display = "none";
+    fInput.addEventListener("change", function () {
+      readFiles(fInput, function (arr) {
+        arr.forEach(function (f) { ct.files.push(f); });
+        saveContracts();
+        rebuild();
+        toast("已添加 " + arr.length + " 个附件");
+        fInput.value = "";
+      });
+    });
+    body.appendChild(fInput);
+
+    var foot = el("div");
+    var addBtn = el("button", "btn btn-primary", "＋ 添加附件");
+    addBtn.addEventListener("click", function () { fInput.click(); });
+    foot.appendChild(addBtn);
+    var closeBtn = el("button", "btn btn-ghost", "关闭");
+    closeBtn.addEventListener("click", function () { closeModal(); renderContracts(); });
+    foot.appendChild(closeBtn);
+
+    openModal("合同附件", body, foot);
+    // 其他关闭方式（✕/点击遮罩）也刷新主列表的附件徽标
+    var refreshOnce = function () { setTimeout(renderContracts, 0); };
+    $("modalOverlay").addEventListener("click", refreshOnce, { once: true });
+    $("modal").querySelector(".modal-close").addEventListener("click", refreshOnce, { once: true });
   }
 
   // 合同流转：点击一次推进到下一流程
@@ -1318,7 +1404,7 @@
       if (!data.ourParty) { toast("请选择我方签约主体"); return; }
       if (isNew) {
         if (!data.supplierId) { toast("请选择供应商"); return; }
-        var nct = Object.assign({ id: uid(), createdAt: todayStr(), flowStatus: "未提审批" }, data);
+        var nct = Object.assign({ id: uid(), createdAt: todayStr(), flowStatus: "未提审批", files: [] }, data);
         contracts.push(nct);
         saveContracts(); closeModal(); toast("合同已添加"); renderContracts();
       } else {
