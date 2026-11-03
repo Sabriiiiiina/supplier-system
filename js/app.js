@@ -171,6 +171,15 @@
   }
   migrateDemands();
 
+  // 合同流转状态（流程按钮依次推进）
+  var FLOW_STEPS = ["未提审批", "已提审批", "已邮寄", "已归档"];
+  function migrateContracts() {
+    contracts.forEach(function (ct) {
+      if (!ct.flowStatus || FLOW_STEPS.indexOf(ct.flowStatus) < 0) ct.flowStatus = "未提审批";
+    });
+  }
+  migrateContracts();
+
   async function loadAllFromCloud() {
     var r1 = await cloudLoad(KEYS.config, {});
     var r2 = await cloudLoad(KEYS.suppliers, []);
@@ -185,6 +194,7 @@
     contracts = r4.value || [];
     widgets = r5.value == null ? null : r5.value;
     migrateDemands();
+    migrateContracts();
   }
 
   async function migrateLocalToCloud() {
@@ -630,7 +640,6 @@
       var s = el("input"); s.type = "text"; s.value = supplierName(c.supplierId); s.disabled = true;
     }
     grid.appendChild(fieldRow("供应商名称", isNew ? supSel : s, true));
-    grid.appendChild(fieldRow("是否签署合同", makeRadio("signed", ["是", "否"], (c && c.signed) || "否")));
     grid.appendChild(fieldRow("供应商签约主体", makeInput("text", "supplierParty", c ? c.supplierParty : "")));
 
     // 我方签约主体：单选 + 可自定义添加选项
@@ -680,7 +689,6 @@
     grid.appendChild(fieldRow("合同结束日期", makeInput("date", "endDate", c ? c.endDate : "")));
     function collect() {
       var out = {
-        signed: getRadio(grid, "signed"),
         supplierParty: grid.querySelector('[data-key="supplierParty"]').value.trim(),
         ourParty: ourSel.value === "__add__" ? "" : ourSel.value,
         startDate: grid.querySelector('[data-key="startDate"]').value,
@@ -696,7 +704,7 @@
   var moduleState = {
     suppliers: { search: "", category: "", status: "", type: "" },
     dispatch: { search: "", project: "", module: "", supplier: "", attr: "", status: "", sort: "createdAt", order: "desc", group: false },
-    contracts: { search: "", supplier: "", signed: "" },
+    contracts: { search: "", supplier: "", flow: "" },
     settlement: { search: "", supplier: "", project: "", status: "", from: "", to: "" }
   };
 
@@ -1199,16 +1207,16 @@
     var supSel = el("select");
     supSel.innerHTML = '<option value="">全部供应商</option>' + suppliers.map(function (s) { return '<option value="' + s.id + '">' + esc(s.name) + "</option>"; }).join("");
     supSel.value = st.supplier; supSel.addEventListener("change", function () { st.supplier = supSel.value; renderContracts(); });
-    var signedSel = el("select");
-    signedSel.innerHTML = '<option value="">是否签署（全部）</option><option value="是">已签署</option><option value="否">未签署</option>';
-    signedSel.value = st.signed; signedSel.addEventListener("change", function () { st.signed = signedSel.value; renderContracts(); });
+    var flowSel = el("select");
+    flowSel.innerHTML = '<option value="">流转状态（全部）</option>' + FLOW_STEPS.map(function (f) { return '<option value="' + f + '">' + f + "</option>"; }).join("");
+    flowSel.value = st.flow; flowSel.addEventListener("change", function () { st.flow = flowSel.value; renderContracts(); });
     tb.appendChild(el("span", "muted", "供应商")); tb.appendChild(supSel);
-    tb.appendChild(el("span", "muted", "签署")); tb.appendChild(signedSel);
+    tb.appendChild(el("span", "muted", "流转")); tb.appendChild(flowSel);
     c.appendChild(tb);
 
     var list = contracts.filter(function (ct) {
       if (st.supplier && ct.supplierId !== st.supplier) return false;
-      if (st.signed && ct.signed !== st.signed) return false;
+      if (st.flow && (ct.flowStatus || "未提审批") !== st.flow) return false;
       if (st.search) {
         var hay = (supplierName(ct.supplierId) + " " + (ct.supplierParty || "") + " " + (ct.ourParty || "")).toLowerCase();
         if (hay.indexOf(st.search.toLowerCase()) < 0) return false;
@@ -1243,10 +1251,13 @@
 
       var tw = el("div", "table-wrap");
       var table = el("table", "data-table");
-      var html = "<thead><tr><th>是否签署</th><th>供应商签约主体</th><th>我方签约主体</th><th>开始日期</th><th>结束日期</th><th>操作</th></tr></thead><tbody>";
+      var html = "<thead><tr><th>流转状态</th><th>供应商签约主体</th><th>我方签约主体</th><th>开始日期</th><th>结束日期</th><th>操作</th></tr></thead><tbody>";
       gcts.forEach(function (ct) {
+        var fidx = FLOW_STEPS.indexOf(ct.flowStatus || "未提审批");
+        if (fidx < 0) fidx = 0;
+        var isDone = fidx >= FLOW_STEPS.length - 1;
         html += "<tr>";
-        html += '<td><select class="cell-select" data-signed="' + ct.id + '"><option value="是"' + (ct.signed === "是" ? " selected" : "") + '>是</option><option value="否"' + (ct.signed === "否" ? " selected" : "") + '>否</option></select></td>';
+        html += '<td><button class="flow-btn f-' + fidx + '" data-flow="' + ct.id + '"' + (isDone ? " disabled" : "") + ">" + FLOW_STEPS[fidx] + (isDone ? " ✓" : " →") + "</button></td>";
         html += "<td>" + esc(ct.supplierParty || "—") + "</td>";
         html += "<td>" + esc(ct.ourParty || "—") + "</td>";
         html += "<td>" + esc(ct.startDate || "—") + "</td>";
@@ -1262,10 +1273,10 @@
     });
     c.appendChild(wrap);
 
-    wrap.querySelectorAll("select[data-signed]").forEach(function (s) {
-      s.addEventListener("change", function () {
-        var ct = contracts.find(function (x) { return x.id === s.dataset.signed; });
-        if (ct) { ct.signed = s.value; saveContracts(); toast("已更新签署状态"); }
+    wrap.querySelectorAll("button[data-flow]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var ct = contracts.find(function (x) { return x.id === b.dataset.flow; });
+        if (ct) advanceContractFlow(ct);
       });
     });
     wrap.querySelectorAll("button[data-edit]").forEach(function (b) {
@@ -1286,6 +1297,17 @@
     });
   }
 
+  // 合同流转：点击一次推进到下一流程
+  function advanceContractFlow(ct) {
+    var idx = FLOW_STEPS.indexOf(ct.flowStatus || "未提审批");
+    if (idx < 0) idx = 0;
+    if (idx >= FLOW_STEPS.length - 1) { toast("已到最终流程「已归档」"); return; }
+    ct.flowStatus = FLOW_STEPS[idx + 1];
+    saveContracts();
+    toast("已推进到「" + ct.flowStatus + "」");
+    renderContracts();
+  }
+
   function openContractEditor(ct, isNew) {
     var form = contractForm(ct, { isNew: isNew });
     var body = el("div"); body.appendChild(form.node);
@@ -1296,7 +1318,7 @@
       if (!data.ourParty) { toast("请选择我方签约主体"); return; }
       if (isNew) {
         if (!data.supplierId) { toast("请选择供应商"); return; }
-        var nct = Object.assign({ id: uid(), createdAt: todayStr() }, data);
+        var nct = Object.assign({ id: uid(), createdAt: todayStr(), flowStatus: "未提审批" }, data);
         contracts.push(nct);
         saveContracts(); closeModal(); toast("合同已添加"); renderContracts();
       } else {
