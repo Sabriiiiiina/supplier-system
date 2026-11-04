@@ -173,6 +173,9 @@
       if (!d.attr) d.attr = "正式需求";
       if (!d.status) d.status = "未开始";
       if (d.quoteCurrency === undefined) d.quoteCurrency = "RMB";
+      if (!Array.isArray(d.scheduleFiles)) d.scheduleFiles = [];
+      // 发包月份按记录创建日期自动生成（保留已手动填写的值）
+      if (!d.dispatchMonth && d.createdAt) d.dispatchMonth = String(d.createdAt).slice(0, 7);
     });
   }
   migrateDemands();
@@ -434,11 +437,12 @@
   }
 
   /* ================= 表单构建助手 ================= */
-  function fieldRow(labelText, control, required, full) {
+  function fieldRow(labelText, control, required, full, hint) {
     var f = el("div", "form-field" + (full ? " full" : ""));
     var lab = el("label");
     lab.textContent = labelText;
     if (required) { var r = el("span", "req", "*"); lab.appendChild(r); }
+    if (hint) lab.appendChild(el("span", "label-hint", hint));
     f.appendChild(lab);
     f.appendChild(control);
     return f;
@@ -523,6 +527,123 @@
     draw();
     return wrap;
   }
+  /* ================= 排期报价表识别 ================= */
+  function normalizeCellText(v) {
+    if (v == null) return "";
+    return String(v).replace(/\u00a0/g, " ").trim();
+  }
+  function excelSerialToDate(v) {
+    var n = Number(v);
+    if (!isFinite(n) || n < 20000 || n > 80000) return "";
+    var d = new Date(Math.round((n - 25569) * 86400 * 1000));
+    return d.getUTCFullYear() + "-" + String(d.getUTCMonth() + 1).padStart(2, "0") + "-" + String(d.getUTCDate()).padStart(2, "0");
+  }
+  function parseDateValue(v) {
+    if (v instanceof Date && !isNaN(v.getTime())) {
+      return v.getFullYear() + "-" + String(v.getMonth() + 1).padStart(2, "0") + "-" + String(v.getDate()).padStart(2, "0");
+    }
+    if (typeof v === "number") return excelSerialToDate(v);
+    var s = normalizeCellText(v);
+    if (!s) return "";
+    var m = s.match(/(\d{4})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})/);
+    if (m) return m[1] + "-" + String(Number(m[2])).padStart(2, "0") + "-" + String(Number(m[3])).padStart(2, "0");
+    m = s.match(/(\d{4})(\d{2})(\d{2})/);
+    if (m && Number(m[2]) >= 1 && Number(m[2]) <= 12 && Number(m[3]) >= 1 && Number(m[3]) <= 31) return m[1] + "-" + m[2] + "-" + m[3];
+    m = s.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
+    if (m) return m[3] + "-" + String(Number(m[1])).padStart(2, "0") + "-" + String(Number(m[2])).padStart(2, "0");
+    return "";
+  }
+  function parseAmountValue(v) {
+    if (typeof v === "number" && isFinite(v)) return { amount: String(v), currency: "RMB" };
+    var s = normalizeCellText(v);
+    if (!s) return null;
+    var currency = /[$＄]|usd/i.test(s) ? "USD" : "RMB";
+    var m = s.replace(/[,，\s]/g, "").match(/-?\d+(?:\.\d+)?/);
+    if (!m) return null;
+    return { amount: m[0], currency: currency };
+  }
+  function matchFieldLabel(label) {
+    var l = label.toLowerCase();
+    if (/ddl|deadline|due\b|截止|交付日期|交付时间|完工/.test(l)) return "ddl";
+    if (/开始/.test(l) && /时间|日期|日/.test(l)) return "dispatchDate";
+    if (/报价|金额|总价|价格|预算|费用|quote|price|total|amount/.test(l)) return "quoteAmount";
+    return "";
+  }
+  function extractSchedule(rows) {
+    var out = { dispatchDate: "", ddl: "", quoteAmount: "", quoteCurrency: "RMB", hits: [] };
+    function setOnce(key, val, currency) {
+      if (out[key]) return;
+      out[key] = val;
+      if (currency === "USD") out.quoteCurrency = "USD";
+      if (out.hits.indexOf(key) < 0) out.hits.push(key);
+    }
+    function scanInline(cellText) {
+      var re = /(开始时间|开始日期|开工日期|开工时间|DDL|截止时间|截止日期|交付日期|交付时间|报价|总价|预算|金额)\s*[：:]\s*([^：:]*?)(?=(?:开始时间|开始日期|开工日期|开工时间|DDL|截止时间|截止日期|交付日期|交付时间|报价|总价|预算|金额)\s*[：:]|$)/g;
+      var m;
+      while ((m = re.exec(cellText))) {
+        var key = matchFieldLabel(m[1]);
+        var val = m[2].trim();
+        if (key === "dispatchDate") { var ds = parseDateValue(val); if (ds) setOnce("dispatchDate", ds); }
+        else if (key === "ddl") { var dl = parseDateValue(val); if (dl) setOnce("ddl", dl); }
+        else if (key === "quoteAmount") { var am = parseAmountValue(val); if (am) setOnce("quoteAmount", am.amount, am.currency); }
+      }
+    }
+    (rows || []).forEach(function (row) {
+      if (!row || !row.length) return;
+      var key = matchFieldLabel(normalizeCellText(row[0]));
+      if (key) {
+        for (var i = 1; i < row.length; i++) {
+          if (normalizeCellText(row[i]) === "") continue;
+          if (key === "dispatchDate") { var ds = parseDateValue(row[i]); if (ds) setOnce("dispatchDate", ds); }
+          else if (key === "ddl") { var dl = parseDateValue(row[i]); if (dl) setOnce("ddl", dl); }
+          else if (key === "quoteAmount") { var am = parseAmountValue(row[i]); if (am) setOnce("quoteAmount", am.amount, am.currency); }
+          break;
+        }
+      }
+      row.forEach(function (cell) { scanInline(normalizeCellText(cell)); });
+    });
+    // 横排式：表头行含字段标签，值在同一列的数据行
+    var colHits = {};
+    (rows || []).forEach(function (row) {
+      (row || []).forEach(function (cell, ci) {
+        var t = normalizeCellText(cell);
+        if (/^(开始时间|开始日期|开工日期|开工时间|DDL|截止时间|截止日期|交付日期|交付时间|报价|总价|预算|金额)$/i.test(t)) {
+          var k = matchFieldLabel(t);
+          if (k) colHits[ci] = k;
+        }
+      });
+    });
+    (rows || []).forEach(function (row) {
+      Object.keys(colHits).forEach(function (ci) {
+        var key = colHits[ci];
+        var v = (row || [])[Number(ci)];
+        if (normalizeCellText(v) === "") return;
+        if (key === "dispatchDate") { var ds = parseDateValue(v); if (ds) setOnce("dispatchDate", ds); }
+        else if (key === "ddl") { var dl = parseDateValue(v); if (dl) setOnce("ddl", dl); }
+        else if (key === "quoteAmount") { var am = parseAmountValue(v); if (am) setOnce("quoteAmount", am.amount, am.currency); }
+      });
+    });
+    return out;
+  }
+  function parseScheduleFile(f, cb) {
+    var name = (f.name || "").toLowerCase();
+    var ext = name.split(".").pop();
+    if (["xlsx", "xls", "csv"].indexOf(ext) < 0) { cb(null); return; }
+    if (!window.XLSX) { cb(null); return; }
+    try {
+      var b64 = String(f.dataUrl || "").split(",")[1];
+      if (!b64) { cb(null); return; }
+      var bin = atob(b64);
+      var arr = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      var wb = XLSX.read(arr, { type: "array", codepage: 65001 });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      if (!ws) { cb(null); return; }
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
+      cb(extractSchedule(rows));
+    } catch (e) { cb(null); }
+  }
+
   function starWidget(val, onChange) {
     var wrap = el("div", "stars");
     var cur = Number(val) || 0;
@@ -607,15 +728,54 @@
     grid.appendChild(fieldRow("数量", makeInput("number", "qty", d ? d.qty : "", "")));
     grid.appendChild(fieldRow("内部工作量", makeInput("text", "workload", d ? d.workload : "", "如：5 人天"), false, true));
 
+    // 排期报价表附件：上传后自动识别开始时间/DDL/报价，识别结果可手动修改
+    var schedFiles = (d && d.scheduleFiles ? d.scheduleFiles : []).slice();
+    var schedLastCount = { v: schedFiles.length };
+    function onSchedFilesChange(filesArr) {
+      schedFiles = filesArr;
+      var added = filesArr.slice(schedLastCount.v);
+      schedLastCount.v = filesArr.length;
+      added.forEach(function (f) {
+        parseScheduleFile(f, function (res) {
+          if (!res || !res.hits.length) {
+            toast("「" + f.name + "」未识别到开始时间/DDL/报价，请手动填写");
+            return;
+          }
+          if (res.dispatchDate) { var n = grid.querySelector('[data-key="dispatchDate"]'); if (n) n.value = res.dispatchDate; }
+          if (res.ddl) { var n = grid.querySelector('[data-key="ddl"]'); if (n) n.value = res.ddl; }
+          if (res.quoteAmount) {
+            var n = grid.querySelector('[data-key="quoteAmount"]'); if (n) n.value = res.quoteAmount;
+            var c = grid.querySelector('[data-key="quoteCurrency"]'); if (c) c.value = res.quoteCurrency || "RMB";
+          }
+          var parts = [];
+          if (res.dispatchDate) parts.push("开始时间 " + res.dispatchDate);
+          if (res.ddl) parts.push("DDL " + res.ddl);
+          if (res.quoteAmount) parts.push("报价 " + res.quoteAmount + " " + (res.quoteCurrency === "USD" ? "USD" : "RMB"));
+          toast("已识别：" + parts.join("、") + "，可手动修改");
+        });
+      });
+    }
+
+    if (isCreate) {
+      grid.appendChild(fieldRow("排期报价表（附件）", fileField(schedFiles, onSchedFilesChange), false, true));
+      grid.appendChild(fieldRow("开始时间", makeInput("date", "dispatchDate", "")));
+      grid.appendChild(fieldRow("DDL", makeInput("date", "ddl", "")));
+      var amountField = el("div", "form-field");
+      var amountWrap = el("div"); amountWrap.style.cssText = "display:flex;gap:8px;";
+      amountWrap.appendChild(makeInput("number", "quoteAmount", "", "金额"));
+      amountWrap.appendChild(makeSelect("quoteCurrency", ["RMB", "USD"], "RMB"));
+      amountField.appendChild(el("label", "", "报价")); amountField.appendChild(amountWrap);
+      grid.appendChild(amountField);
+    }
+
     if (!isCreate) {
       grid.appendChild(fieldRow("需求状态", makeSelect("status", ["未开始", "进行中", "已完成", "延期"], d.status)));
-      grid.appendChild(fieldRow("发包月份", makeInput("month", "dispatchMonth", d.dispatchMonth)));
-      grid.appendChild(fieldRow("发包时间", makeInput("date", "dispatchDate", d.dispatchDate)));
+      grid.appendChild(fieldRow("发包月份", makeInput("month", "dispatchMonth", d.dispatchMonth), false, true, "默认按创建日期自动生成"));
+      grid.appendChild(fieldRow("开始时间", makeInput("date", "dispatchDate", d.dispatchDate)));
       grid.appendChild(fieldRow("DDL", makeInput("date", "ddl", d.ddl)));
       grid.appendChild(fieldRow("供应商", makeSelect("supplier", suppliers.map(function (s) { return { value: s.id, label: s.name }; }), d.supplierId, "请选择供应商")));
 
-      var schedFiles = (d.scheduleFiles || []).slice();
-      grid.appendChild(fieldRow("排期（附件）", fileField(schedFiles, function (f) { schedFiles = f; }), false, true));
+      grid.appendChild(fieldRow("排期报价表（附件）", fileField(schedFiles, onSchedFilesChange), false, true));
 
       var amountField = el("div", "form-field");
       var amountWrap = el("div"); amountWrap.style.cssText = "display:flex;gap:8px;";
@@ -644,15 +804,21 @@
         project: q("project"),
         module: q("module"),
         qty: q("qty"),
-        workload: q("workload").trim()
+        workload: q("workload").trim(),
+        scheduleFiles: schedFiles
       };
+      if (isCreate) {
+        out.dispatchDate = q("dispatchDate");
+        out.ddl = q("ddl");
+        out.quoteAmount = q("quoteAmount");
+        out.quoteCurrency = q("quoteCurrency") || "RMB";
+      }
       if (!isCreate) {
         out.status = q("status") || "未开始";
         out.dispatchMonth = q("dispatchMonth");
         out.dispatchDate = q("dispatchDate");
         out.ddl = q("ddl");
         out.supplierId = q("supplier");
-        out.scheduleFiles = schedFiles;
         out.quoteAmount = q("quoteAmount");
         out.quoteCurrency = q("quoteCurrency") || "RMB";
         out.acceptDate = q("acceptDate");
@@ -974,7 +1140,7 @@
       });
     });
 
-    var tip = el("div", "hint", "合作状态自动判断规则：有正在做的需求（发包时间≤今天≤DDL）→合作中；测试未通过→终止合作；曾有需求但当前无进行中→静态；无需求→未合作。可在编辑里手动覆盖。");
+    var tip = el("div", "hint", "合作状态自动判断规则：有正在做的需求（开始时间≤今天≤DDL）→合作中；测试未通过→终止合作；曾有需求但当前无进行中→静态；无需求→未合作。可在编辑里手动覆盖。");
     c.appendChild(tip);
   }
 
@@ -1079,7 +1245,7 @@
     var sortItem = el("div", "filter-item");
     sortItem.appendChild(el("span", "", "排序"));
     var sSel = el("select");
-    sSel.innerHTML = '<option value="createdAt">创建时间</option><option value="dispatchDate">发包时间</option><option value="ddl">DDL</option><option value="quoteAmount">报价金额</option>';
+    sSel.innerHTML = '<option value="createdAt">创建时间</option><option value="dispatchDate">开始时间</option><option value="ddl">DDL</option><option value="quoteAmount">报价金额</option>';
     sSel.value = st.sort;
     sSel.addEventListener("change", function () { st.sort = sSel.value; renderDispatch(); });
     sortItem.appendChild(sSel);
@@ -1138,7 +1304,7 @@
         html += "<td>" + esc(d.module || "—") + "</td>";
         html += '<td class="num">' + esc(d.qty || "") + "</td>";
         html += "<td>" + esc(d.workload || "—") + "</td>";
-        html += "<td>" + esc(d.dispatchMonth || "—") + "</td>";
+        html += "<td>" + esc(d.dispatchMonth || (d.createdAt ? String(d.createdAt).slice(0, 7) : "—")) + "</td>";
         html += "<td>" + esc(d.dispatchDate || "—") + "</td>";
         html += "<td>" + (d.ddl ? (d.ddl < todayStr() && d.status !== "已完成" ? '<span style="color:var(--danger)">' + esc(d.ddl) + "</span>" : esc(d.ddl)) : "—") + "</td>";
         html += "<td>" + (d.supplierId ? esc(supplierName(d.supplierId)) : '<span class="muted">—</span>') + "</td>";
@@ -1180,7 +1346,7 @@
   }
 
   function headerHtml() {
-    return "<thead><tr><th>需求名称</th><th>属性</th><th>状态</th><th>需求人</th><th>项目</th><th>模块</th><th class='num'>数量</th><th>内部工作量</th><th>发包月份</th><th>发包时间</th><th>DDL</th><th>供应商</th><th>排期</th><th class='num'>报价</th><th>验收</th><th>测试情况</th><th>评价</th><th>备注</th><th>操作</th></tr></thead>";
+    return "<thead><tr><th>需求名称</th><th>属性</th><th>状态</th><th>需求人</th><th>项目</th><th>模块</th><th class='num'>数量</th><th>内部工作量</th><th>发包月份</th><th>开始时间</th><th>DDL</th><th>供应商</th><th>排期</th><th class='num'>报价</th><th>验收</th><th>测试情况</th><th>评价</th><th>备注</th><th>操作</th></tr></thead>";
   }
 
   function bindDispatchTable(table) {
@@ -1224,6 +1390,7 @@
       if (!data.module) { toast("请选择需求模块"); return; }
       var nd = Object.assign({
         id: uid(), status: "未开始", supplierId: "", scheduleFiles: [],
+        dispatchMonth: todayStr().slice(0, 7),
         quoteAmount: "", quoteCurrency: "RMB", acceptDate: "", testResult: "", testComment: "",
         rating: 0, ratingText: "", note: "", createdBy: config.currentUser, createdAt: todayStr(),
         settlement: { completion: 0, settleFiles: [], invoiceFiles: [], confirmed: false }
@@ -2344,6 +2511,8 @@
       if (dmArr) demands = dmArr;
     },
     renderContracts: renderContracts,
+    renderDispatch: renderDispatch,
+    parseScheduleFile: parseScheduleFile,
     getState: function () {
       return {
         session: !!session,
