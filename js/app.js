@@ -174,6 +174,7 @@
       if (!d.status) d.status = "未开始";
       if (d.quoteCurrency === undefined) d.quoteCurrency = "RMB";
       if (!Array.isArray(d.scheduleFiles)) d.scheduleFiles = [];
+      if (d.totalManDays == null) d.totalManDays = "";
       // 发包月份按记录创建日期自动生成（保留已手动填写的值）
       if (!d.dispatchMonth && d.createdAt) d.dispatchMonth = String(d.createdAt).slice(0, 7);
     });
@@ -510,6 +511,11 @@
         var chip = el("div", "file-chip");
         chip.appendChild(el("span", "fname", f.name));
         chip.appendChild(el("span", "fsize", f.size ? (f.size / 1024).toFixed(0) + "KB" : ""));
+        if (canPreview(f)) {
+          var pv = el("a"); pv.textContent = "预览"; pv.style.cursor = "pointer";
+          pv.addEventListener("click", function () { openFilePreview(f); });
+          chip.appendChild(pv);
+        }
         var dl = el("a"); dl.textContent = "下载"; dl.href = f.dataUrl; dl.download = f.name; dl.target = "_blank";
         var rm = el("a"); rm.textContent = "移除"; rm.style.cursor = "pointer";
         rm.addEventListener("click", function () { filesArr.splice(i, 1); onChange(filesArr); draw(); });
@@ -562,15 +568,26 @@
     if (!m) return null;
     return { amount: m[0], currency: currency };
   }
+  // 排期报价表字段标签正则（scanInline 与横排表头共用）
+  var SCHEDULE_LABEL_RE = "(?:开始时间|开始日期|开工日期|开工时间|DDL|deadline|最终提交日期|最终提交时间|最终提交|提交日期|提交时间|交稿日期|交稿时间|终稿日期|终稿时间|截止时间|截止日期|交付日期|交付时间|完工日期|完工时间|报价|总价|预算|金额|费用|总人天|人天|总工时|工时|工作量)";
+
   function matchFieldLabel(label) {
     var l = label.toLowerCase();
-    if (/ddl|deadline|due\b|截止|交付日期|交付时间|完工/.test(l)) return "ddl";
+    if (/ddl|deadline|due\b|截止|交付|提交|交稿|终稿|完工/.test(l)) return "ddl";
     if (/开始/.test(l) && /时间|日期|日/.test(l)) return "dispatchDate";
+    if (/人天|工时|工作量|man[- ]?day/.test(l)) return "totalManDays";
     if (/报价|金额|总价|价格|预算|费用|quote|price|total|amount/.test(l)) return "quoteAmount";
     return "";
   }
+  function parseManDaysValue(v) {
+    if (typeof v === "number" && isFinite(v)) return String(v);
+    var s = normalizeCellText(v);
+    if (!s) return "";
+    var m = s.replace(/[,，\s]/g, "").match(/\d+(?:\.\d+)?/);
+    return m ? m[0] : "";
+  }
   function extractSchedule(rows) {
-    var out = { dispatchDate: "", ddl: "", quoteAmount: "", quoteCurrency: "RMB", hits: [] };
+    var out = { dispatchDate: "", ddl: "", quoteAmount: "", quoteCurrency: "RMB", totalManDays: "", hits: [] };
     function setOnce(key, val, currency) {
       if (out[key]) return;
       out[key] = val;
@@ -578,14 +595,16 @@
       if (out.hits.indexOf(key) < 0) out.hits.push(key);
     }
     function scanInline(cellText) {
-      var re = /(开始时间|开始日期|开工日期|开工时间|DDL|截止时间|截止日期|交付日期|交付时间|报价|总价|预算|金额)\s*[：:]\s*([^：:]*?)(?=(?:开始时间|开始日期|开工日期|开工时间|DDL|截止时间|截止日期|交付日期|交付时间|报价|总价|预算|金额)\s*[：:]|$)/g;
+      var re = new RegExp("(" + SCHEDULE_LABEL_RE + ")\\s*[：:]\\s*([^：:]*?)(?=" + SCHEDULE_LABEL_RE + "\\s*[：:]|$)", "gi");
       var m;
       while ((m = re.exec(cellText))) {
         var key = matchFieldLabel(m[1]);
         var val = m[2].trim();
+        if (!val) continue;
         if (key === "dispatchDate") { var ds = parseDateValue(val); if (ds) setOnce("dispatchDate", ds); }
         else if (key === "ddl") { var dl = parseDateValue(val); if (dl) setOnce("ddl", dl); }
         else if (key === "quoteAmount") { var am = parseAmountValue(val); if (am) setOnce("quoteAmount", am.amount, am.currency); }
+        else if (key === "totalManDays") { var md = parseManDaysValue(val); if (md) setOnce("totalManDays", md); }
       }
     }
     (rows || []).forEach(function (row) {
@@ -597,17 +616,19 @@
           if (key === "dispatchDate") { var ds = parseDateValue(row[i]); if (ds) setOnce("dispatchDate", ds); }
           else if (key === "ddl") { var dl = parseDateValue(row[i]); if (dl) setOnce("ddl", dl); }
           else if (key === "quoteAmount") { var am = parseAmountValue(row[i]); if (am) setOnce("quoteAmount", am.amount, am.currency); }
+          else if (key === "totalManDays") { var md = parseManDaysValue(row[i]); if (md) setOnce("totalManDays", md); }
           break;
         }
       }
       row.forEach(function (cell) { scanInline(normalizeCellText(cell)); });
     });
     // 横排式：表头行含字段标签，值在同一列的数据行
+    var labelRe = new RegExp("^(?:" + SCHEDULE_LABEL_RE + ")$", "i");
     var colHits = {};
     (rows || []).forEach(function (row) {
       (row || []).forEach(function (cell, ci) {
         var t = normalizeCellText(cell);
-        if (/^(开始时间|开始日期|开工日期|开工时间|DDL|截止时间|截止日期|交付日期|交付时间|报价|总价|预算|金额)$/i.test(t)) {
+        if (labelRe.test(t)) {
           var k = matchFieldLabel(t);
           if (k) colHits[ci] = k;
         }
@@ -621,6 +642,7 @@
         if (key === "dispatchDate") { var ds = parseDateValue(v); if (ds) setOnce("dispatchDate", ds); }
         else if (key === "ddl") { var dl = parseDateValue(v); if (dl) setOnce("ddl", dl); }
         else if (key === "quoteAmount") { var am = parseAmountValue(v); if (am) setOnce("quoteAmount", am.amount, am.currency); }
+        else if (key === "totalManDays") { var md = parseManDaysValue(v); if (md) setOnce("totalManDays", md); }
       });
     });
     return out;
@@ -642,6 +664,171 @@
       var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
       cb(extractSchedule(rows));
     } catch (e) { cb(null); }
+  }
+
+  /* ================= 附件在线预览 ================= */
+  function canPreview(f) {
+    var ext = String(f.name || "").toLowerCase().split(".").pop() || "";
+    if (["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "ico"].indexOf(ext) >= 0) return "img";
+    if (ext === "pdf") return "pdf";
+    if (["xlsx", "xls", "csv"].indexOf(ext) >= 0) return "sheet";
+    if (["txt", "md", "log", "json", "js", "css", "html", "htm", "xml"].indexOf(ext) >= 0) return "text";
+    return "";
+  }
+  function sheetTableFromDataUrl(dataUrl) {
+    try {
+      if (!window.XLSX) return "";
+      var b64 = String(dataUrl || "").split(",")[1];
+      if (!b64) return "";
+      var bin = atob(b64);
+      var arr = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      var wb = XLSX.read(arr, { type: "array", codepage: 65001 });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      if (!ws) return "";
+      var h = XLSX.utils.sheet_to_html(ws);
+      var i1 = h.indexOf("<table");
+      var i2 = h.lastIndexOf("</table>");
+      if (i1 < 0 || i2 < 0) return "";
+      return h.slice(i1, i2 + 8);
+    } catch (e) { return ""; }
+  }
+  var pvOverlay = null;
+  function closeFilePreview() {
+    if (pvOverlay) { pvOverlay.remove(); pvOverlay = null; }
+  }
+  function openFilePreview(f) {
+    var kind = canPreview(f);
+    if (!kind) { toast("该格式暂不支持在线预览，请下载查看"); return; }
+    closeFilePreview();
+    var body = el("div");
+    if (kind === "img") {
+      var img = document.createElement("img");
+      img.src = f.dataUrl; img.className = "file-preview-img"; img.alt = f.name;
+      body.appendChild(img);
+    } else if (kind === "pdf") {
+      var frame = document.createElement("iframe");
+      frame.src = f.dataUrl; frame.className = "file-preview-frame"; frame.title = f.name;
+      body.appendChild(frame);
+      body.appendChild(el("div", "muted", "如无法显示，请点击下方「下载」后打开"));
+    } else if (kind === "sheet") {
+      var box = el("div", "file-preview-sheet");
+      var html = sheetTableFromDataUrl(f.dataUrl);
+      if (html) { box.innerHTML = html; }
+      else { box.appendChild(el("div", "muted", "表格解析失败，请下载查看")); }
+      body.appendChild(box);
+    } else {
+      var pre = document.createElement("pre");
+      pre.className = "file-preview-pre";
+      try {
+        var b64 = String(f.dataUrl || "").split(",")[1] || "";
+        pre.textContent = b64 ? decodeURIComponent(escape(atob(b64))) : "（空文件）";
+      } catch (e) { pre.textContent = "文本读取失败，请下载查看"; }
+      body.appendChild(pre);
+    }
+    var ov = el("div", "modal-overlay show");
+    ov.addEventListener("click", function (e) { if (e.target === ov) closeFilePreview(); });
+    var m = el("div", "modal open preview-modal");
+    var head = el("div", "modal-head");
+    head.appendChild(el("div", "modal-title", "预览：" + (f.name || "附件")));
+    var cb = el("button", "icon-btn", "✕"); cb.title = "关闭"; cb.addEventListener("click", closeFilePreview);
+    head.appendChild(cb);
+    var mbody = el("div", "modal-body"); mbody.appendChild(body);
+    var foot = el("div", "modal-foot");
+    var dl = el("button", "btn btn-ghost", "下载");
+    dl.addEventListener("click", function () {
+      var a = document.createElement("a");
+      a.href = f.dataUrl; a.download = f.name || "附件";
+      document.body.appendChild(a); a.click(); a.remove();
+    });
+    foot.appendChild(dl);
+    var closeBtn = el("button", "btn btn-primary", "关闭");
+    closeBtn.addEventListener("click", closeFilePreview);
+    foot.appendChild(closeBtn);
+    m.appendChild(head); m.appendChild(mbody); m.appendChild(foot);
+    ov.appendChild(m);
+    document.body.appendChild(ov);
+    pvOverlay = ov;
+  }
+  // 通用附件管理弹窗：预览/下载/删除/追加上传
+  function openFileManager(title, filesArr, onChanged, afterClose, hint) {
+    if (!Array.isArray(filesArr)) return;
+    var body = el("div");
+    if (hint) body.appendChild(el("div", "muted", hint));
+    var listWrap = el("div", "file-manager");
+    function fileRow(f, idx) {
+      var row = el("div", "file-row");
+      var icon = el("div", "file-icon", "📄");
+      var info = el("div", "file-info");
+      info.appendChild(el("div", "file-name", f.name));
+      info.appendChild(el("div", "file-meta", fmtSize(f.size || 0)));
+      var acts = el("div", "file-acts");
+      if (canPreview(f)) {
+        var pv = el("button", "link-btn", "预览");
+        pv.addEventListener("click", function () { openFilePreview(f); });
+        acts.appendChild(pv);
+      }
+      var dl = el("button", "link-btn", "下载");
+      dl.addEventListener("click", function () {
+        var a = document.createElement("a");
+        a.href = f.dataUrl; a.download = f.name || "附件";
+        document.body.appendChild(a); a.click(); a.remove();
+      });
+      var del = el("button", "link-btn danger", "删除");
+      del.addEventListener("click", function () {
+        confirmDialog("删除确认", "确定删除该附件吗？", function () {
+          filesArr.splice(idx, 1);
+          if (onChanged) onChanged();
+          rebuild();
+          toast("附件已删除");
+        });
+      });
+      acts.appendChild(dl); acts.appendChild(del);
+      row.appendChild(icon); row.appendChild(info); row.appendChild(acts);
+      return row;
+    }
+    function rebuild() {
+      listWrap.innerHTML = "";
+      if (!filesArr.length) {
+        listWrap.appendChild(el("div", "file-empty", "暂无附件，点击下方按钮上传"));
+        return;
+      }
+      filesArr.forEach(function (f, idx) { listWrap.appendChild(fileRow(f, idx)); });
+    }
+    rebuild();
+    body.appendChild(listWrap);
+
+    var fInput = document.createElement("input");
+    fInput.type = "file"; fInput.multiple = true; fInput.style.display = "none";
+    fInput.addEventListener("change", function () {
+      readFiles(fInput, function (arr) {
+        arr.forEach(function (f) { filesArr.push(f); });
+        if (onChanged) onChanged();
+        rebuild();
+        toast("已添加 " + arr.length + " 个附件");
+        fInput.value = "";
+      });
+    });
+    body.appendChild(fInput);
+
+    var foot = el("div");
+    var addBtn = el("button", "btn btn-primary", "＋ 添加附件");
+    addBtn.addEventListener("click", function () { fInput.click(); });
+    foot.appendChild(addBtn);
+    var closeBtn = el("button", "btn btn-ghost", "关闭");
+    closeBtn.addEventListener("click", function () { closeModal(); if (afterClose) afterClose(); });
+    foot.appendChild(closeBtn);
+
+    openModal(title, body, foot);
+    if (afterClose) {
+      var refreshOnce = function () { setTimeout(afterClose, 0); };
+      $("modalOverlay").addEventListener("click", refreshOnce, { once: true });
+      $("modal").querySelector(".modal-close").addEventListener("click", refreshOnce, { once: true });
+    }
+  }
+  function openScheduleFiles(d) {
+    if (!Array.isArray(d.scheduleFiles)) d.scheduleFiles = [];
+    openFileManager("排期报价表", d.scheduleFiles, saveDemands, renderDispatch, "需求：" + (d.name || "") + " · 点击「预览」可在线查看，无需下载");
   }
 
   function starWidget(val, onChange) {
@@ -738,11 +925,12 @@
       added.forEach(function (f) {
         parseScheduleFile(f, function (res) {
           if (!res || !res.hits.length) {
-            toast("「" + f.name + "」未识别到开始时间/DDL/报价，请手动填写");
+            toast("「" + f.name + "」未识别到开始时间/DDL/报价/总人天，请手动填写");
             return;
           }
           if (res.dispatchDate) { var n = grid.querySelector('[data-key="dispatchDate"]'); if (n) n.value = res.dispatchDate; }
           if (res.ddl) { var n = grid.querySelector('[data-key="ddl"]'); if (n) n.value = res.ddl; }
+          if (res.totalManDays) { var n = grid.querySelector('[data-key="totalManDays"]'); if (n) n.value = res.totalManDays; }
           if (res.quoteAmount) {
             var n = grid.querySelector('[data-key="quoteAmount"]'); if (n) n.value = res.quoteAmount;
             var c = grid.querySelector('[data-key="quoteCurrency"]'); if (c) c.value = res.quoteCurrency || "RMB";
@@ -751,6 +939,7 @@
           if (res.dispatchDate) parts.push("开始时间 " + res.dispatchDate);
           if (res.ddl) parts.push("DDL " + res.ddl);
           if (res.quoteAmount) parts.push("报价 " + res.quoteAmount + " " + (res.quoteCurrency === "USD" ? "USD" : "RMB"));
+          if (res.totalManDays) parts.push("总人天 " + res.totalManDays);
           toast("已识别：" + parts.join("、") + "，可手动修改");
         });
       });
@@ -766,6 +955,7 @@
       amountWrap.appendChild(makeSelect("quoteCurrency", ["RMB", "USD"], "RMB"));
       amountField.appendChild(el("label", "", "报价")); amountField.appendChild(amountWrap);
       grid.appendChild(amountField);
+      grid.appendChild(fieldRow("总人天", makeInput("text", "totalManDays", "", "如：15"), false, true, "上传排期报价表可自动识别，可手动修改"));
     }
 
     if (!isCreate) {
@@ -783,6 +973,7 @@
       amountWrap.appendChild(makeSelect("quoteCurrency", ["RMB", "USD"], d.quoteCurrency || "RMB"));
       amountField.appendChild(el("label", "", "报价")); amountField.appendChild(amountWrap);
       grid.appendChild(amountField);
+      grid.appendChild(fieldRow("总人天", makeInput("text", "totalManDays", d.totalManDays || "", "如：15"), false, true, "上传排期报价表可自动识别，可手动修改"));
 
       grid.appendChild(fieldRow("验收时间", makeInput("date", "acceptDate", d.acceptDate)));
       grid.appendChild(fieldRow("测试情况", makeRadio("testResult", ["测试通过", "测试未通过"], d.testResult)));
@@ -805,6 +996,7 @@
         module: q("module"),
         qty: q("qty"),
         workload: q("workload").trim(),
+        totalManDays: q("totalManDays").trim(),
         scheduleFiles: schedFiles
       };
       if (isCreate) {
@@ -1308,8 +1500,9 @@
         html += "<td>" + esc(d.dispatchDate || "—") + "</td>";
         html += "<td>" + (d.ddl ? (d.ddl < todayStr() && d.status !== "已完成" ? '<span style="color:var(--danger)">' + esc(d.ddl) + "</span>" : esc(d.ddl)) : "—") + "</td>";
         html += "<td>" + (d.supplierId ? esc(supplierName(d.supplierId)) : '<span class="muted">—</span>') + "</td>";
-        html += "<td>" + ((d.scheduleFiles || []).length ? "📎" + d.scheduleFiles.length : "—") + "</td>";
+        html += "<td>" + ((d.scheduleFiles || []).length ? '<button class="file-chip" data-sfiles="' + d.id + '">📎 ' + d.scheduleFiles.length + " 个</button>" : '<span class="muted">—</span>') + "</td>";
         html += '<td class="num">' + (d.quoteAmount ? money(d.quoteAmount, d.quoteCurrency) : "—") + "</td>";
+        html += '<td class="num">' + (d.totalManDays ? esc(d.totalManDays) + ' <span class="muted">人天</span>' : "—") + "</td>";
         html += "<td>" + esc(d.acceptDate || "—") + "</td>";
         html += "<td>" + (d.testResult ? (d.testResult === "测试通过" ? '<span class="badge green">测试通过</span>' : '<span class="badge red">测试未通过</span>') + (d.testComment ? '<div class="cell-sub">' + esc(d.testComment) + "</div>" : "") : '<span class="muted">—</span>') + "</td>";
         html += "<td>" + (d.rating ? '<span class="stars" style="color:#f5a623">' + starStr(d.rating) + "</span>" : '<span class="muted">—</span>') + "</td>";
@@ -1346,7 +1539,7 @@
   }
 
   function headerHtml() {
-    return "<thead><tr><th>需求名称</th><th>属性</th><th>状态</th><th>需求人</th><th>项目</th><th>模块</th><th class='num'>数量</th><th>内部工作量</th><th>发包月份</th><th>开始时间</th><th>DDL</th><th>供应商</th><th>排期</th><th class='num'>报价</th><th>验收</th><th>测试情况</th><th>评价</th><th>备注</th><th>操作</th></tr></thead>";
+    return "<thead><tr><th>需求名称</th><th>属性</th><th>状态</th><th>需求人</th><th>项目</th><th>模块</th><th class='num'>数量</th><th>内部工作量</th><th>发包月份</th><th>开始时间</th><th>DDL</th><th>供应商</th><th>排期</th><th class='num'>报价</th><th class='num'>总人天</th><th>验收</th><th>测试情况</th><th>评价</th><th>备注</th><th>操作</th></tr></thead>";
   }
 
   function bindDispatchTable(table) {
@@ -1360,6 +1553,12 @@
       b.addEventListener("click", function () {
         var d = demands.find(function (x) { return x.id === b.dataset.edit; });
         if (d) openDemandEditor(d);
+      });
+    });
+    table.querySelectorAll("button[data-sfiles]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var d = demands.find(function (x) { return x.id === b.dataset.sfiles; });
+        if (d) openScheduleFiles(d);
       });
     });
     table.querySelectorAll("button[data-del]").forEach(function (b) {
@@ -1391,7 +1590,7 @@
       var nd = Object.assign({
         id: uid(), status: "未开始", supplierId: "", scheduleFiles: [],
         dispatchMonth: todayStr().slice(0, 7),
-        quoteAmount: "", quoteCurrency: "RMB", acceptDate: "", testResult: "", testComment: "",
+        quoteAmount: "", quoteCurrency: "RMB", totalManDays: "", acceptDate: "", testResult: "", testComment: "",
         rating: 0, ratingText: "", note: "", createdBy: config.currentUser, createdAt: todayStr(),
         settlement: { completion: 0, settleFiles: [], invoiceFiles: [], confirmed: false }
       }, data);
@@ -1564,74 +1763,7 @@
   // 合同附件管理：查看/下载/删除/不限数量上传
   function openContractFiles(ct) {
     if (!Array.isArray(ct.files)) ct.files = [];
-    var body = el("div");
-    body.appendChild(el("div", "muted", "供应商：" + supplierName(ct.supplierId) + " · 附件数量不限，单个文件不超过 2MB"));
-
-    var listWrap = el("div", "file-manager");
-    function fileRow(f, idx) {
-      var row = el("div", "file-row");
-      var icon = el("div", "file-icon", "📄");
-      var info = el("div", "file-info");
-      info.appendChild(el("div", "file-name", f.name));
-      info.appendChild(el("div", "file-meta", fmtSize(f.size || 0)));
-      var acts = el("div", "file-acts");
-      var dl = el("button", "link-btn", "下载");
-      dl.addEventListener("click", function () {
-        var a = document.createElement("a");
-        a.href = f.dataUrl; a.download = f.name || "附件";
-        document.body.appendChild(a); a.click(); a.remove();
-      });
-      var del = el("button", "link-btn danger", "删除");
-      del.addEventListener("click", function () {
-        confirmDialog("删除确认", "确定删除该附件吗？", function () {
-          ct.files.splice(idx, 1);
-          saveContracts();
-          rebuild();
-          toast("附件已删除");
-        });
-      });
-      acts.appendChild(dl); acts.appendChild(del);
-      row.appendChild(icon); row.appendChild(info); row.appendChild(acts);
-      return row;
-    }
-    function rebuild() {
-      listWrap.innerHTML = "";
-      if (!ct.files.length) {
-        listWrap.appendChild(el("div", "file-empty", "暂无附件，点击下方按钮上传"));
-        return;
-      }
-      ct.files.forEach(function (f, idx) { listWrap.appendChild(fileRow(f, idx)); });
-    }
-    rebuild();
-    body.appendChild(listWrap);
-
-    // 隐藏的 file input：支持多选、多次追加
-    var fInput = document.createElement("input");
-    fInput.type = "file"; fInput.multiple = true; fInput.style.display = "none";
-    fInput.addEventListener("change", function () {
-      readFiles(fInput, function (arr) {
-        arr.forEach(function (f) { ct.files.push(f); });
-        saveContracts();
-        rebuild();
-        toast("已添加 " + arr.length + " 个附件");
-        fInput.value = "";
-      });
-    });
-    body.appendChild(fInput);
-
-    var foot = el("div");
-    var addBtn = el("button", "btn btn-primary", "＋ 添加附件");
-    addBtn.addEventListener("click", function () { fInput.click(); });
-    foot.appendChild(addBtn);
-    var closeBtn = el("button", "btn btn-ghost", "关闭");
-    closeBtn.addEventListener("click", function () { closeModal(); renderContracts(); });
-    foot.appendChild(closeBtn);
-
-    openModal("合同附件", body, foot);
-    // 其他关闭方式（✕/点击遮罩）也刷新主列表的附件徽标
-    var refreshOnce = function () { setTimeout(renderContracts, 0); };
-    $("modalOverlay").addEventListener("click", refreshOnce, { once: true });
-    $("modal").querySelector(".modal-close").addEventListener("click", refreshOnce, { once: true });
+    openFileManager("合同附件", ct.files, saveContracts, renderContracts, "供应商：" + supplierName(ct.supplierId) + " · 点击「预览」可在线查看，无需下载");
   }
 
   // 合同流转：点击一次推进到下一流程
