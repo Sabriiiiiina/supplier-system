@@ -598,6 +598,24 @@ body[data-theme="dark"] .pending-row { background: #151c25; }
 .contracts-table tbody tr:first-child.ct-group-start td { border-top: none; }
 body[data-theme="dark"] .contracts-table td.ct-sup-cell { background: rgba(47,107,255,.12); }
 
+/* 收款信息单元格：值 + 一键复制 */
+.copy-cell { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.copy-cell > span { color: var(--text); }
+.copy-btn {
+  flex-shrink: 0;
+  display: inline-flex; align-items: center;
+  padding: 2px 8px;
+  font-size: 12px; line-height: 1.5;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--primary);
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.copy-btn:hover { background: var(--primary-soft); border-color: var(--primary); }
+.copy-btn:active { transform: translateY(1px); }
+
 /* ---------- 合同表单：我方主体单选 ---------- */
 .select-with-add select { width: 100%; }
 

@@ -183,6 +183,9 @@
     contracts.forEach(function (ct) {
       if (!ct.flowStatus || FLOW_STEPS.indexOf(ct.flowStatus) < 0) ct.flowStatus = "未提审批";
       if (!Array.isArray(ct.files)) ct.files = [];
+      ["payeeName", "bankName", "bankAccount"].forEach(function (k) {
+        if (ct[k] == null) ct[k] = "";
+      });
     });
   }
   migrateContracts();
@@ -398,6 +401,26 @@
   $("modalOverlay").addEventListener("click", closeModal);
 
   /* 居中确认弹窗（替代浏览器原生 confirm） */
+  function copyText(txt, tip) {
+    txt = String(txt == null ? "" : txt);
+    function ok() { toast(tip || "已复制"); }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = txt;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      try { document.execCommand("copy"); ok(); } catch (e) { toast("复制失败，请手动复制"); }
+      ta.remove();
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(ok, fallback);
+    } else {
+      fallback();
+    }
+  }
+
   function confirmDialog(title, msg, onYes, okText, okClass) {
     var body = el("div", "confirm-dialog");
     body.appendChild(el("div", "confirm-text", msg));
@@ -706,12 +729,18 @@
     ourWrap.appendChild(addBox);
     grid.appendChild(fieldRow("我方签约主体", ourWrap, true));
 
+    grid.appendChild(fieldRow("收款人全称", makeInput("text", "payeeName", c ? c.payeeName : "", "如：XX科技有限公司")));
+    grid.appendChild(fieldRow("开户行", makeInput("text", "bankName", c ? c.bankName : "", "如：招商银行北京分行")));
+    grid.appendChild(fieldRow("银行账号", makeInput("text", "bankAccount", c ? c.bankAccount : "", "请输入银行账号")));
     grid.appendChild(fieldRow("合同开始日期", makeInput("date", "startDate", c ? c.startDate : "")));
     grid.appendChild(fieldRow("合同结束日期", makeInput("date", "endDate", c ? c.endDate : "")));
     function collect() {
       var out = {
         supplierParty: grid.querySelector('[data-key="supplierParty"]').value.trim(),
         ourParty: ourSel.value === "__add__" ? "" : ourSel.value,
+        payeeName: grid.querySelector('[data-key="payeeName"]').value.trim(),
+        bankName: grid.querySelector('[data-key="bankName"]').value.trim(),
+        bankAccount: grid.querySelector('[data-key="bankAccount"]').value.trim(),
         startDate: grid.querySelector('[data-key="startDate"]').value,
         endDate: grid.querySelector('[data-key="endDate"]').value
       };
@@ -1291,7 +1320,14 @@
       return '<button class="flow-btn f-' + fidx + '" data-flow="' + ct.id + '"' + (isDone ? " disabled" : "") + ">" + FLOW_STEPS[fidx] + (isDone ? " ✓" : " →") + "</button>";
     }
 
-    var html = '<table class="data-table contracts-table"><thead><tr><th>供应商</th><th>流转状态</th><th>供应商签约主体</th><th>我方签约主体</th><th>开始日期</th><th>结束日期</th><th>附件</th><th>操作</th></tr></thead><tbody>';
+    // 收款信息单元格：值 + 复制按钮
+    function copyCell(ct, key) {
+      var v = ct[key] || "";
+      if (!v) return "—";
+      return '<div class="copy-cell"><span>' + esc(v) + '</span><button class="copy-btn" data-copy="' + ct.id + '" data-field="' + key + '" title="点击复制">复制</button></div>';
+    }
+
+    var html = '<table class="data-table contracts-table"><thead><tr><th>供应商</th><th>流转状态</th><th>供应商签约主体</th><th>我方签约主体</th><th>收款人全称</th><th>开户行</th><th>银行账号</th><th>开始日期</th><th>结束日期</th><th>附件</th><th>操作</th></tr></thead><tbody>';
     lastSid = null;
     var runIdx = -1;
     sorted.forEach(function (ct) {
@@ -1305,6 +1341,9 @@
       html += "<td>" + flowBtnHtml(ct) + "</td>";
       html += "<td>" + esc(ct.supplierParty || "—") + "</td>";
       html += "<td>" + esc(ct.ourParty || "—") + "</td>";
+      html += "<td>" + copyCell(ct, "payeeName") + "</td>";
+      html += "<td>" + copyCell(ct, "bankName") + "</td>";
+      html += "<td>" + copyCell(ct, "bankAccount") + "</td>";
       html += "<td>" + esc(ct.startDate || "—") + "</td>";
       html += "<td>" + esc(ct.endDate || "—") + "</td>";
       html += "<td>" + ((ct.files || []).length ? '<button class="file-chip" data-files="' + ct.id + '">📎 ' + ct.files.length + " 个</button>" : '<button class="link-btn" data-files="' + ct.id + '">上传</button>') + "</td>";
@@ -1321,6 +1360,13 @@
       b.addEventListener("click", function () {
         var ct = contracts.find(function (x) { return x.id === b.dataset.flow; });
         if (ct) advanceContractFlow(ct);
+      });
+    });
+    wrap.querySelectorAll("button[data-copy]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var ct = contracts.find(function (x) { return x.id === b.dataset.copy; });
+        if (!ct) return;
+        copyText(ct[b.dataset.field] || "", "已复制");
       });
     });
     wrap.querySelectorAll("button[data-files]").forEach(function (b) {
