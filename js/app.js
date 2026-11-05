@@ -990,7 +990,7 @@
     return out;
   }
   /* 合同收款信息识别（收款人全称/开户行/银行账号） */
-  var BANK_TAG_RE = "(?:收款人全称|收款人名称|收款单位名称|收款单位|收款方名称|开户名称|开户名|开户户名|户名|开户银行|开户行|开户支行|银行名称|银行账号|银行帐号|收款账号|收款账户|收款帐号|账户号|银行卡号|账号|帐号|卡号)";
+  var BANK_TAG_RE = "(?:收款人全称|收款人名称|收款单位名称|收款单位|收款方名称|收款方|账户名称|单位名称|公司名称|开户名称|开户名|开户户名|户名|开户银行|开户行|开户支行|收款银行|银行名称|银行账号|银行帐号|收款账号|收款账户|收款帐号|开户账号|打款账号|账户号|银行卡号|账号|帐号|卡号)";
   function cutBankValue(s) {
     var parts = String(s || "").split(new RegExp(BANK_TAG_RE + "[：:]?"));
     var v = parts[0] || "";
@@ -1003,11 +1003,14 @@
     if (/(全称|名称|开户|账号|帐号|户名|卡号|地址|电话|联系人|税号|邮箱|邮编)/.test(s)) return "";
     return s;
   }
+  // 银行简称开头：工行/建行/农行/中国工商银行…（含"银行/支行/分行"等字样时直接通过）
+  var BANK_SHORT_PREFIX_RE = "^(?:中国|工商|农业|建设|交通|招商|邮储|中信|光大|民生|兴业|浦发|广发|华夏|平安|工行|农行|建行|交行|招行)";
   function goodBankName(s) {
     if (!s || s.length < 2 || s.length > 60) return "";
     if (/(账号|帐号|户名|全称|地址|电话|联系人)/.test(s)) return "";
-    if (!/(银行|信用社|支行|分行|营业部|储蓄所)/.test(s)) return "";
-    return s;
+    if (/(银行|信用社|支行|分行|营业部|储蓄所)/.test(s)) return s;
+    if (new RegExp(BANK_SHORT_PREFIX_RE).test(s)) return s;
+    return "";
   }
   function cleanAccountValue(s) {
     var digits = String(s || "").replace(/[^0-9]/g, "");
@@ -1017,17 +1020,17 @@
     var out = { payeeName: "", bankName: "", bankAccount: "" };
     if (!text) return out;
     var t = String(text).replace(/\r/g, "").replace(/\u3000/g, " ");
-    // 标签冒号后紧跟换行时合并到同一行（docx/pdf 常见排版）
-    t = t.replace(new RegExp("(" + BANK_TAG_RE + ")[：:]\\s*\\n\\s*", "g"), "$1：");
+    // 标签后换行（含"标签：\n值"、"标签\n值"）合并到同一行（docx/pdf 常见排版），仅合并单个换行
+    t = t.replace(new RegExp("(" + BANK_TAG_RE + ")[：: \\t\\u3000]*\\n[ \\t\\u3000]*", "g"), "$1：");
     var m, i;
     // 1) 收款人全称
-    var payeeTags = ["收款人全称", "收款人名称", "收款单位名称", "收款单位", "收款方名称", "开户名称", "开户名", "开户户名", "户名", "收款人"];
+    var payeeTags = ["收款人全称", "收款人名称", "收款单位名称", "收款单位", "收款方名称", "收款方", "账户名称", "开户名称", "开户名", "开户户名", "户名", "单位名称", "公司名称", "收款人"];
     for (i = 0; i < payeeTags.length && !out.payeeName; i++) {
       m = t.match(new RegExp(payeeTags[i] + "[：:\\s]*([^\\n，,。;；]{2,60})"));
       if (m) out.payeeName = goodPayeeName(cutBankValue(m[1]));
     }
     // 2) 开户行
-    var bankTags = ["开户银行", "开户行", "开户支行", "银行名称"];
+    var bankTags = ["开户银行", "开户行", "开户支行", "收款银行", "银行名称"];
     for (i = 0; i < bankTags.length && !out.bankName; i++) {
       m = t.match(new RegExp(bankTags[i] + "[：:\\s]*([^\\n，,。;；]{2,60})"));
       if (m) out.bankName = goodBankName(cutBankValue(m[1]));
@@ -1046,6 +1049,70 @@
     }
     return out;
   }
+  /* xlsx/csv 表格解析：支持横向表头（表头行+数据行）与纵向（标签 值）两种布局 */
+  function gridCellText(v) {
+    return v == null ? "" : String(v).trim();
+  }
+  function gridTagKind(cell) {
+    var s = gridCellText(cell).replace(/[：:\s]/g, "");
+    if (/(收款人全称|收款人名称|收款单位|收款方|账户名称|单位名称|公司名称|户名|开户名|开户名称)/.test(s)) return "payee";
+    if (/(开户行|开户银行|开户支行|收款银行|银行名称)/.test(s)) return "bank";
+    if (/(银行账号|银行帐号|收款账号|收款账户|收款帐号|开户账号|打款账号|账户号|银行卡号|账号|帐号|卡号)/.test(s)) return "acc";
+    return "";
+  }
+  function extractBankFromGrid(rows) {
+    var out = { payeeName: "", bankName: "", bankAccount: "" };
+    if (!Array.isArray(rows) || !rows.length) return out;
+    // A) 横向表头：一行内出现 >=2 个银行类标签，标签所在列下方数据行取值
+    var labelRow = -1, labelCols = { payee: -1, bank: -1, acc: -1 };
+    for (var r = 0; r < rows.length; r++) {
+      var row = rows[r] || [];
+      var found = { payee: -1, bank: -1, acc: -1 }, cnt = 0;
+      for (var c = 0; c < row.length; c++) {
+        var k = gridTagKind(row[c]);
+        if (k && found[k] < 0) { found[k] = c; cnt++; }
+      }
+      if (cnt >= 2) { labelRow = r; labelCols = found; break; }
+    }
+    if (labelRow >= 0) {
+      for (var rr = labelRow + 1; rr < rows.length && rr < labelRow + 12; rr++) {
+        var drow = rows[rr] || [];
+        if (labelCols.payee >= 0 && !out.payeeName) {
+          var pv = goodPayeeName(gridCellText(drow[labelCols.payee]));
+          if (pv) out.payeeName = pv;
+        }
+        if (labelCols.bank >= 0 && !out.bankName) {
+          var bv = goodBankName(gridCellText(drow[labelCols.bank]));
+          if (bv) out.bankName = bv;
+        }
+        if (labelCols.acc >= 0 && !out.bankAccount) {
+          var av = cleanAccountValue(gridCellText(drow[labelCols.acc]));
+          if (av) out.bankAccount = av;
+        }
+        if (out.payeeName && out.bankName && out.bankAccount) break;
+      }
+      if (out.payeeName || out.bankName || out.bankAccount) return out;
+    }
+    // B) 纵向：某行 = 标签 + 相邻值
+    for (var r2 = 0; r2 < rows.length; r2++) {
+      var row2 = (rows[r2] || []).map(gridCellText);
+      for (var c2 = 0; c2 < row2.length; c2++) {
+        var k2 = gridTagKind(row2[c2]);
+        if (!k2) continue;
+        var val = "";
+        for (var c3 = c2 + 1; c3 < row2.length; c3++) {
+          if (gridTagKind(row2[c3])) break;
+          if (row2[c3]) { val = row2[c3]; break; }
+        }
+        if (!val) continue;
+        if (k2 === "payee" && !out.payeeName) { var pv2 = goodPayeeName(val); if (pv2) out.payeeName = pv2; }
+        else if (k2 === "bank" && !out.bankName) { var bv2 = goodBankName(val); if (bv2) out.bankName = bv2; }
+        else if (k2 === "acc" && !out.bankAccount) { var av2 = cleanAccountValue(val); if (av2) out.bankAccount = av2; }
+      }
+      if (out.payeeName && out.bankName && out.bankAccount) break;
+    }
+    return out;
+  }
   function parseContractFile(f, cb) {
     var ext = String(f.name || "").toLowerCase().split(".").pop();
     var b64 = String(f.dataUrl || "").split(",")[1] || "";
@@ -1056,12 +1123,12 @@
       for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return arr;
     }
-    function finish(text) {
+    function finish(text, bankOverride) {
       if (!text) { cb(null); return; }
       var jia = extractParty(text, "甲方");
       var yi = extractParty(text, "乙方");
       var dates = extractContractDates(text);
-      var bank = extractBankInfo(text);
+      var bank = bankOverride || extractBankInfo(text);
       if (!jia && !yi && !dates.startDate && !dates.endDate && !bank.payeeName && !bank.bankName && !bank.bankAccount) { cb(null); return; }
       cb({ ourParty: jia, supplierParty: yi, startDate: dates.startDate, endDate: dates.endDate, payeeName: bank.payeeName, bankName: bank.bankName, bankAccount: bank.bankAccount });
     }
@@ -1072,12 +1139,22 @@
         var wb = XLSX.read(bytes(), { type: "array", codepage: 65001 });
         var ws = wb.Sheets[wb.SheetNames[0]];
         var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
-        finish(rows.map(function (r) { return r.join(" "); }).join("\n"));
+        var text = rows.map(function (r) { return r.join(" "); }).join("\n");
+        var gBank = extractBankFromGrid(rows);
+        var tBank = extractBankInfo(text);
+        finish(text, {
+          payeeName: gBank.payeeName || tBank.payeeName,
+          bankName: gBank.bankName || tBank.bankName,
+          bankAccount: gBank.bankAccount || tBank.bankAccount
+        });
       } catch (e) { cb(null); }
     } else if (ext === "docx") {
       docxText(bytes()).then(finish);
     } else if (ext === "pdf") {
-      pdfText(bytes()).then(finish);
+      pdfText(bytes()).then(function (text) {
+        if (!text) { cb({ scanPdf: true }); return; }
+        finish(text);
+      });
     } else {
       cb(null);
     }
@@ -1287,7 +1364,7 @@
     var supSel = null;
     if (isNew) {
       supSel = el("select");
-      supSel.innerHTML = suppliers.map(function (s) {
+      supSel.innerHTML = '<option value="">请选择供应商…</option>' + suppliers.map(function (s) {
         return '<option value="' + s.id + '">' + esc(s.name) + "</option>";
       }).join("");
     } else {
@@ -1307,7 +1384,7 @@
     var addCancel = el("button", "btn btn-ghost btn-sm", "取消");
     var ourTouched = false; // 用户手动选择过我方主体后，识别结果不再自动覆盖
     function fillOurSel(selected) {
-      ourSel.innerHTML = config.ourParties.map(function (p) {
+      ourSel.innerHTML = '<option value="">请选择我方签约主体…</option>' + config.ourParties.map(function (p) {
         return '<option value="' + esc(p) + '"' + (p === selected ? " selected" : "") + ">" + esc(p) + "</option>";
       }).join("") + '<option value="__add__">＋ 添加新主体…</option>';
     }
@@ -1353,6 +1430,7 @@
     var lastFileCount = ctFiles.length;
     function applyContractParse(res, fname) {
       if (!res) return;
+      if (res.scanPdf) { toast("「" + (fname || "附件") + "」是扫描件 PDF，没有文字层，无法自动识别，请手动填写"); return; }
       var changed = [];
       var spInput = grid.querySelector('[data-key="supplierParty"]');
       if (res.supplierParty && spInput && !spInput.value.trim()) {
@@ -2073,6 +2151,7 @@
     openFileManager("合同附件", ct.files, saveContracts, renderContracts, "供应商：" + supplierName(ct.supplierId) + " · 点击「预览」可在线查看，无需下载；上传合同文件可自动识别双方签约主体、收款信息与合同起止日期", function (f) {
       parseContractFile(f, function (res) {
         if (!res) return;
+        if (res.scanPdf) { toast("「" + f.name + "」是扫描件 PDF，没有文字层，无法自动识别，请手动填写"); return; }
         var changed = [];
         if (res.supplierParty && !ct.supplierParty) { ct.supplierParty = res.supplierParty; changed.push("供应商签约主体（乙方）「" + res.supplierParty + "」"); }
         if (res.ourParty && !ct.ourParty) {
