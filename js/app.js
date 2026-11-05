@@ -962,6 +962,33 @@
       } catch (e) { resolve(""); }
     });
   }
+  // 合同日期：一个四位年份日期（2026年1月5日 / 2026-01-05 / 2026/1/5 / 2026.1.5）
+  var CONTRACT_DATE_RE = "(\\d{4}\\s*[年\\-/.．]\\s*\\d{1,2}\\s*[月\\-/.．]\\s*\\d{1,2}\\s*日?)";
+  function normContractDate(s) {
+    var t = normalizeCellText(s).replace(/日$/, "");
+    return parseDateValue(t);
+  }
+  function extractContractDates(text) {
+    var out = { startDate: "", endDate: "" };
+    if (!text) return out;
+    var t = String(text).replace(/\r/g, "");
+    function setOnce(k, v) { var d = normContractDate(v); if (d && !out[k]) out[k] = d; }
+    // 1) 显式字段行：开始日期：X / 结束日期：Y
+    var re = new RegExp("(?:合同)?(?:开始日期|开始时间|生效日期|生效时间|起始日期|启动日期|履行起始日)[：:]\\s*" + CONTRACT_DATE_RE, "g");
+    var m;
+    while ((m = re.exec(t))) setOnce("startDate", m[1]);
+    re = new RegExp("(?:合同)?(?:结束日期|结束时间|终止日期|到期日期|截止日期|届满日期|失效日期|履行截止日)[：:]\\s*" + CONTRACT_DATE_RE, "g");
+    while ((m = re.exec(t))) setOnce("endDate", m[1]);
+    if (out.startDate || out.endDate) return out;
+    // 2) 区间模式：自 X 起至 Y 止 / 自 X 至 Y
+    re = new RegExp("(?:自|从)\\s*" + CONTRACT_DATE_RE + "[^\\n]{0,24}?(?:至|到|—|–|~)\\s*" + CONTRACT_DATE_RE + "[^\\n]{0,6}?(?:止|为止|结束)?", "g");
+    while ((m = re.exec(t))) { setOnce("startDate", m[1]); setOnce("endDate", m[2]); }
+    if (out.startDate || out.endDate) return out;
+    // 3) 宽松区间：X 至 Y / X—Y（同一句内两个日期相邻）
+    re = new RegExp(CONTRACT_DATE_RE + "\\s*(?:至|到|—|–|~)\\s*" + CONTRACT_DATE_RE, "g");
+    while ((m = re.exec(t))) { setOnce("startDate", m[1]); setOnce("endDate", m[2]); }
+    return out;
+  }
   function parseContractFile(f, cb) {
     var ext = String(f.name || "").toLowerCase().split(".").pop();
     var b64 = String(f.dataUrl || "").split(",")[1] || "";
@@ -976,8 +1003,9 @@
       if (!text) { cb(null); return; }
       var jia = extractParty(text, "甲方");
       var yi = extractParty(text, "乙方");
-      if (!jia && !yi) { cb(null); return; }
-      cb({ ourParty: jia, supplierParty: yi });
+      var dates = extractContractDates(text);
+      if (!jia && !yi && !dates.startDate && !dates.endDate) { cb(null); return; }
+      cb({ ourParty: jia, supplierParty: yi, startDate: dates.startDate, endDate: dates.endDate });
     }
     if (["txt", "md", "log"].indexOf(ext) >= 0) {
       finish(decodeTextBytes(bytes()));
@@ -1282,6 +1310,14 @@
         hideAddBox();
         ourTouched = true; // 识别填充一次后，不再被后续上传的文件覆盖
         changed.push("我方签约主体（甲方）「" + res.ourParty + "」");
+      }
+      if (res.startDate) {
+        var sInp = grid.querySelector('[data-key="startDate"]');
+        if (sInp && !sInp.value) { sInp.value = res.startDate; changed.push("开始日期 " + res.startDate); }
+      }
+      if (res.endDate) {
+        var eInp = grid.querySelector('[data-key="endDate"]');
+        if (eInp && !eInp.value) { eInp.value = res.endDate; changed.push("结束日期 " + res.endDate); }
       }
       if (changed.length) toast("已从「" + (fname || "附件") + "」识别：" + changed.join("、") + "，可手动修改");
     }
@@ -1974,6 +2010,8 @@
           if (config.ourParties.indexOf(res.ourParty) < 0) { config.ourParties.push(res.ourParty); saveConfig(); }
           changed.push("我方签约主体（甲方）「" + res.ourParty + "」");
         }
+        if (res.startDate && !ct.startDate) { ct.startDate = res.startDate; changed.push("开始日期 " + res.startDate); }
+        if (res.endDate && !ct.endDate) { ct.endDate = res.endDate; changed.push("结束日期 " + res.endDate); }
         if (changed.length) {
           saveContracts(); renderContracts();
           toast("已从「" + f.name + "」识别：" + changed.join("、") + "，可在编辑中修改");

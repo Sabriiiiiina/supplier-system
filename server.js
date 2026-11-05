@@ -46,6 +46,6 @@ http
       res.end(data);
     });
   })
-  .listen(PORT, () => {
+  .listen(PORT, "0.0.0.0", () => {
     console.log(`Supplier system running at http://localhost:${PORT}`);
   });
