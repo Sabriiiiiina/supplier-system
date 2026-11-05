@@ -2320,6 +2320,9 @@
   function renderContracts(query) {
     var st = moduleState.contracts;
     if (query) { var q = parseQuery(query); for (var k in q) if (k in st) st[k] = q[k]; }
+    // 记录当前表格滚动位置：重建后恢复，避免操作（流转/保存/识别回填）后闪跳回顶
+    var prevWrap = document.querySelector(".table-wrap.contracts-wrap");
+    var prevScroll = prevWrap ? prevWrap.scrollTop : 0;
 
     var c = $("pageContainer"); c.innerHTML = "";
     var btnAdd = el("button", "btn btn-primary", "＋ 添加合同");
@@ -2422,6 +2425,8 @@
     var wrap = el("div", "table-wrap contracts-wrap");
     wrap.innerHTML = html;
     c.appendChild(wrap);
+    // 恢复滚动位置（列表变短时浏览器自动收敛到有效范围）
+    if (prevScroll > 0) wrap.scrollTop = prevScroll;
 
     wrap.querySelectorAll("button[data-flow]").forEach(function (b) {
       b.addEventListener("click", function () {
