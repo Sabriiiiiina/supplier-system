@@ -971,22 +971,45 @@
   function extractContractDates(text) {
     var out = { startDate: "", endDate: "" };
     if (!text) return out;
-    var t = String(text).replace(/\r/g, "");
-    function setOnce(k, v) { var d = normContractDate(v); if (d && !out[k]) out[k] = d; }
-    // 1) 显式字段行：开始日期：X / 结束日期：Y
-    var re = new RegExp("(?:合同)?(?:开始日期|开始时间|生效日期|生效时间|起始日期|启动日期|履行起始日)[：:]\\s*" + CONTRACT_DATE_RE, "g");
+    var t = String(text).replace(/\r/g, "").replace(/\u3000/g, " ");
+    // PDF 逐字提取字间空白紧凑化：日期标签
+    var LOOSE_DTAGS = ["合作开始日期", "合作结束日期", "合同开始日期", "合同结束日期", "服务开始日期", "服务结束日期", "项目开始日期", "项目结束日期", "履行起始日", "履行截止日", "开始日期", "开始时间", "生效日期", "生效时间", "起始日期", "启动日期", "结束日期", "结束时间", "终止日期", "到期日期", "截止日期", "届满日期", "失效日期"];
+    LOOSE_DTAGS.sort(function (a, b) { return b.length - a.length; });
+    LOOSE_DTAGS.forEach(function (tag) {
+      t = t.replace(new RegExp(tag.split("").join("\\s*"), "g"), tag);
+    });
+    // 日期标签后换行合并到同一行（docx 表格「开始日期\n2026年3月1日」）
+    var DTAG_RE = "(?:合作开始日期|合作结束日期|合同开始日期|合同结束日期|服务开始日期|服务结束日期|项目开始日期|项目结束日期|履行起始日|履行截止日|开始日期|开始时间|生效日期|生效时间|起始日期|启动日期|结束日期|结束时间|终止日期|到期日期|截止日期|届满日期|失效日期)";
+    t = t.replace(new RegExp("(" + DTAG_RE + ")[：: \\t]*\\n(?:[ \\t]*\\n)?[ \\t]*", "g"), "$1：");
+    // 保密/竞业上下文排除：保密期限等不是合同周期
+    function secretNear(idx) {
+      var win = t.slice(Math.max(0, idx - 80), idx);
+      return /保密|竞业/.test(win);
+    }
+    function setOnce(k, v, idx) {
+      if (idx != null && secretNear(idx)) return;
+      var d = normContractDate(v);
+      if (d && !out[k]) out[k] = d;
+    }
+    var D = CONTRACT_DATE_RE;
     var m;
-    while ((m = re.exec(t))) setOnce("startDate", m[1]);
-    re = new RegExp("(?:合同)?(?:结束日期|结束时间|终止日期|到期日期|截止日期|届满日期|失效日期|履行截止日)[：:]\\s*" + CONTRACT_DATE_RE, "g");
-    while ((m = re.exec(t))) setOnce("endDate", m[1]);
+    // 1) 显式字段行：开始日期：X / 结束日期：Y
+    var sRe = new RegExp("(?:合同|合作|服务|项目)?(?:开始日期|开始时间|生效日期|生效时间|起始日期|启动日期|履行起始日)[：:]\\s*" + D, "g");
+    while ((m = sRe.exec(t))) setOnce("startDate", m[1], m.index);
+    var eRe = new RegExp("(?:合同|合作|服务|项目)?(?:结束日期|结束时间|终止日期|到期日期|截止日期|届满日期|失效日期|履行截止日)[：:]\\s*" + D, "g");
+    while ((m = eRe.exec(t))) setOnce("endDate", m[1], m.index);
+    if (out.startDate && out.endDate) return out;
+    // 2) 期限标签区间：合同期限/合作期限/合作周期/有效期：2026年3月1日至2026年12月31日（或 起…止）
+    var pRe = new RegExp("(?:合同期限|合作期限|合作周期|合同周期|合同有效期|合作有效期|有效期|服务期限|合作时间|服务时间|合同期|期限|履行期)[：:为\\s]*" + D + "[^\\n]{0,24}?(?:至|到|—|–|~|－|-)\\s*" + D, "g");
+    while ((m = pRe.exec(t))) { setOnce("startDate", m[1], m.index); setOnce("endDate", m[2], m.index); }
+    if (out.startDate && out.endDate) return out;
+    // 3) 区间模式：自 X 起至 Y 止 / X 起至 Y（含无"自/从"开头）
+    var qRe = new RegExp("(?:自|从)?\\s*" + D + "[^\\n]{0,24}?[\\s，,]*(?:起)?[\\s，,]*(?:至|到|—|–|~|－|-)\\s*" + D + "[^\\n]{0,6}?(?:止|为止|结束)?", "g");
+    while ((m = qRe.exec(t))) { setOnce("startDate", m[1], m.index); setOnce("endDate", m[2], m.index); }
     if (out.startDate || out.endDate) return out;
-    // 2) 区间模式：自 X 起至 Y 止 / 自 X 至 Y
-    re = new RegExp("(?:自|从)\\s*" + CONTRACT_DATE_RE + "[^\\n]{0,24}?(?:至|到|—|–|~)\\s*" + CONTRACT_DATE_RE + "[^\\n]{0,6}?(?:止|为止|结束)?", "g");
-    while ((m = re.exec(t))) { setOnce("startDate", m[1]); setOnce("endDate", m[2]); }
-    if (out.startDate || out.endDate) return out;
-    // 3) 宽松区间：X 至 Y / X—Y（同一句内两个日期相邻）
-    re = new RegExp(CONTRACT_DATE_RE + "\\s*(?:至|到|—|–|~)\\s*" + CONTRACT_DATE_RE, "g");
-    while ((m = re.exec(t))) { setOnce("startDate", m[1]); setOnce("endDate", m[2]); }
+    // 4) 宽松区间：X 至 Y / X—Y（同一句内两个日期相邻）
+    var lRe = new RegExp(D + "\\s*(?:至|到|—|–|~|－|-)\\s*" + D, "g");
+    while ((m = lRe.exec(t))) { setOnce("startDate", m[1], m.index); setOnce("endDate", m[2], m.index); }
     return out;
   }
   /* 合同收款信息识别（收款人全称/开户行/银行账号） */
@@ -1049,34 +1072,59 @@
     if (cut2 > 0) seg = seg.slice(0, cut2);
     return seg;
   }
-  /* 指定文本范围内提取收款三字段；inSegment=true 时"账号"等裸标签不再要求前文关键词 */
-  function extractBankFromText(t, inSegment) {
+  /* 指定文本范围内提取收款三字段；所有命中须归属乙方侧（标签前最近主体标记不是甲方）；excludeNames 与甲方名一致的收款人被拒绝 */
+  function extractBankFromText(t, inSegment, excludeNames) {
     var out = { payeeName: "", bankName: "", bankAccount: "" };
     if (!t) return out;
     var m, i;
+    // 归属判断：该位置之前最近的主体标记是甲方还是乙方（无标记返回""）
+    function partyBefore(idx) {
+      var before = t.slice(0, idx);
+      var bYi = before.lastIndexOf("乙方"), bJia = before.lastIndexOf("甲方");
+      if (bYi < 0 && bJia < 0) return "";
+      return bYi > bJia ? "乙" : "甲";
+    }
+    // 与甲方签约主体同名/包含的收款人值拒绝（收款人不可能是甲方）
+    function isExcluded(v) {
+      if (!excludeNames || !v) return false;
+      for (var i2 = 0; i2 < excludeNames.length; i2++) {
+        var n = excludeNames[i2];
+        if (n && n.length >= 4 && (v.indexOf(n) >= 0 || n.indexOf(v) >= 0)) return true;
+      }
+      return false;
+    }
     // 强标签优先（账户名=收款人全称），弱标签（单位名称/公司名称/收款方）最后兜底，避免命中表头
     var payeeTags = ["收款人全称", "收款人名称", "账户名", "账户名称", "开户名称", "开户名", "开户户名", "户名", "收款单位名称", "收款单位", "收款方名称", "收款方", "单位名称", "公司名称", "收款人"];
     for (i = 0; i < payeeTags.length && !out.payeeName; i++) {
-      m = t.match(new RegExp(payeeTags[i] + "[：:\\s]*([^\\n，,。;；、]{2,60})"));
-      if (m) out.payeeName = goodPayeeName(cutBankValue(m[1]));
+      var pRe = new RegExp(payeeTags[i] + "[：:\\s]*([^\\n，,。;；、]{2,60})", "g");
+      while ((m = pRe.exec(t))) {
+        if (partyBefore(m.index) === "甲") continue; // 甲方信息块：跳过
+        var pv = goodPayeeName(cutBankValue(m[1]));
+        if (!pv || isExcluded(pv)) continue;
+        out.payeeName = pv;
+        break;
+      }
     }
     var bankTags = ["开户银行", "开户行", "开户支行", "收款银行", "银行名称"];
     var bankRaw = "";
     for (i = 0; i < bankTags.length && !out.bankName; i++) {
-      m = t.match(new RegExp(bankTags[i] + "[：:\\s]*([^\\n，,。;；、]{2,60})"));
-      if (m) {
+      var bRe = new RegExp(bankTags[i] + "[：:\\s]*([^\\n，,。;；、]{2,60})", "g");
+      while ((m = bRe.exec(t))) {
+        if (partyBefore(m.index) === "甲") continue; // 甲方开户行：跳过
         var bv = cutBankValue(m[1]);
         if (!bankRaw) bankRaw = bv;
-        out.bankName = goodBankName(bv);
+        var gb = goodBankName(bv);
+        if (gb) { out.bankName = gb; break; }
       }
     }
     // 标签写反纠正：开户行值像公司名、账户名值像银行名时交换（合同常见笔误）
-    if (!out.bankName && bankRaw && out.payeeName && goodPayeeName(bankRaw) && goodBankName(out.payeeName)) {
+    if (!out.bankName && bankRaw && out.payeeName && goodPayeeName(bankRaw) && goodBankName(out.payeeName) && !isExcluded(bankRaw)) {
       out.bankName = out.payeeName;
       out.payeeName = goodPayeeName(bankRaw);
     }
     var accRe = new RegExp("(" + BANK_TAG_RE + ")[：:\\s]*([0-9][0-9\\s\\-·.]{4,45})", "g");
     while ((m = accRe.exec(t))) {
+      if (partyBefore(m.index) === "甲") continue; // 甲方账号：跳过
       var tag = m[1], val = cleanAccountValue(m[2]);
       if (!val) continue;
       if (!inSegment && /^(账号|帐号|卡号)$/.test(tag)) {
@@ -1089,7 +1137,7 @@
     }
     return out;
   }
-  function extractBankInfo(text) {
+  function extractBankInfo(text, excludeNames) {
     var out = { payeeName: "", bankName: "", bankAccount: "" };
     if (!text) return out;
     var t = String(text).replace(/\r/g, "").replace(/\u3000/g, " ");
@@ -1103,10 +1151,13 @@
     });
     // 标签后换行（含"标签：\n值"、"标签\n值"、docx 表格"标签\n(空行)\n值"）合并到同一行
     t = t.replace(new RegExp("(" + BANK_TAG_RE + ")[：: \\t\\u3000]*\\n(?:[ \\t\\u3000]*\\n)?[ \\t\\u3000]*", "g"), "$1：");
-    // 找到收款/付款段落标题时，严格只用该段落提取（三字段在一起），绝不全文兜底防误识别
+    // 找到收款/付款段落标题时，优先只用该段落提取（三字段在一起）；段落提取为空时继续兜底
     var seg = findBankSegment(t);
-    if (seg) return extractBankFromText(seg, true);
-    // 无段落标题兜底：找「开户行」聚集块（±300 字符内含账号），并要求块归属乙方侧（防甲方主体信息块）
+    if (seg) {
+      var r = extractBankFromText(seg, true, excludeNames);
+      if (r.payeeName || r.bankName || r.bankAccount) return r;
+    }
+    // 无段落标题/段落提取空：找「开户行」聚集块（±300 字符内含账号），并要求块归属乙方侧（防甲方主体信息块）
     var kbRe = /开户行|开户银行|开户支行|收款银行/g;
     var m2;
     while ((m2 = kbRe.exec(t))) {
@@ -1115,12 +1166,13 @@
       var bYi = before.lastIndexOf("乙方"), bJia = before.lastIndexOf("甲方");
       if (bJia > bYi) continue; // 甲方侧信息块：跳过
       // 乙方侧（或无主体标记）：从最近的"乙方"之后取聚集块，排除甲方主体字段
-      var from = Math.max(bYi + 2, m2.index - 300), to = m2.index + 300;
-      var p = extractBankFromText(t.slice(from, to), true);
+      var from = Math.max(bYi >= 0 ? bYi + 2 : 0, m2.index - 300), to = m2.index + 300;
+      var p = extractBankFromText(t.slice(from, to), true, excludeNames);
       if (!p.bankAccount) continue; // 没有账号佐证不采信（防表头）
       return p;
     }
-    return out;
+    // 最后全文兜底（提取函数内已有乙方归属检查与甲方名排除）
+    return extractBankFromText(t, false, excludeNames);
   }
   /* 合同文档含多份协议时（如 保密协议 + 外包制作框架合作），聚焦"外包制作框架合作"标题之后的正文 */
   function focusFrame(text) {
@@ -1234,20 +1286,27 @@
     }
     function finish(text, bankOverride) {
       if (!text) { cb({ noText: true }); return; }
-      // 多协议文档（保密协议+外包制作框架合作）：严格只识别"外包制作框架"标题之后的正文
+      // 多协议文档（保密协议+外包制作框架合作）：主体与日期优先取"外包制作框架"标题之后的正文
       var ft = focusFrame(text);
       var strict = (ft !== text);
-      var jia = extractParty(ft, "甲方");
-      var yi = extractParty(ft, "乙方");
-      if (strict) {
-        // 甲乙双方两份协议通常一致：框架部分缺失时才回退全文（值相同，风险低）
-        if (!jia) jia = extractParty(text, "甲方");
-        if (!yi) yi = extractParty(text, "乙方");
-      }
-      // 日期与收款信息：有框架标题时严格只用框架部分，绝不取保密协议内容
+      var jia = extractParty(ft, "甲方") || extractParty(text, "甲方");
+      var yi = extractParty(ft, "乙方") || extractParty(text, "乙方");
+      // 日期：框架部分优先；不足时全文兜底合并（日期常写在标题之前的合同信息表；内部已排除保密上下文）
       var dates = extractContractDates(ft);
-      if (!strict && (!dates.startDate && !dates.endDate)) dates = extractContractDates(text);
-      var bank = bankOverride || extractBankInfo(ft);
+      if (strict) {
+        var fullD = extractContractDates(text);
+        if (!dates.startDate) dates.startDate = fullD.startDate;
+        if (!dates.endDate) dates.endDate = fullD.endDate;
+      }
+      // 收款信息：框架部分优先；不足时全文兜底（提取内部已做乙方归属检查与甲方名排除）
+      var exclude = jia ? [jia] : [];
+      var bank = bankOverride || extractBankInfo(ft, exclude);
+      if (strict && (!bank.payeeName || !bank.bankName || !bank.bankAccount)) {
+        var fullB = extractBankInfo(text, exclude);
+        if (!bank.payeeName) bank.payeeName = fullB.payeeName;
+        if (!bank.bankName) bank.bankName = fullB.bankName;
+        if (!bank.bankAccount) bank.bankAccount = fullB.bankAccount;
+      }
       if (!jia && !yi && !dates.startDate && !dates.endDate && !bank.payeeName && !bank.bankName && !bank.bankAccount) { cb({ noFields: true }); return; }
       cb({ ourParty: jia, supplierParty: yi, startDate: dates.startDate, endDate: dates.endDate, payeeName: bank.payeeName, bankName: bank.bankName, bankAccount: bank.bankAccount });
     }
@@ -1606,7 +1665,19 @@
           else if (aInp.value.trim() !== res.bankAccount) conflicts.push("银行账号 " + res.bankAccount);
         }
       }
-      if (changed.length) toast("已从「" + (fname || "附件") + "」识别：" + changed.join("、") + "，可手动修改");
+      if (changed.length) {
+        var missed = [];
+        if (!res.ourParty) missed.push("我方签约主体");
+        if (!res.supplierParty) missed.push("供应商签约主体");
+        if (!res.startDate) missed.push("开始日期");
+        if (!res.endDate) missed.push("结束日期");
+        if (!res.payeeName) missed.push("收款人全称");
+        if (!res.bankName) missed.push("开户行");
+        if (!res.bankAccount) missed.push("银行账号");
+        var msg = "已从「" + (fname || "附件") + "」识别：" + changed.join("、");
+        if (missed.length) msg += "；未识别到：" + missed.join("、") + "，请手动填写";
+        toast(msg);
+      }
       else if (conflicts.length) toast("识别到：" + conflicts.join("、") + "，但表单已有值未覆盖，请核对后手动修改");
     }
     var pendingParses = 0; // 合同附件识别进行中，防止保存时识别结果未回填
