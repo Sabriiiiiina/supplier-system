@@ -2296,7 +2296,11 @@
     function copyCell(ct, key) {
       var v = ct[key] || "";
       if (!v) return "—";
-      return '<div class="copy-cell"><span>' + esc(v) + '</span><button class="copy-btn" data-copy="' + ct.id + '" data-field="' + key + '" title="点击复制">复制</button></div>';
+      return '<div class="copy-cell"><span title="' + esc(v) + '">' + esc(v) + '</span><button class="copy-btn" data-copy="' + ct.id + '" data-field="' + key + '" title="点击复制">复制</button></div>';
+    }
+    // 普通长文本单元格：超长省略、悬停显示全文
+    function textCell(v) {
+      return v ? '<span class="cell-nowrap" title="' + esc(v) + '">' + esc(v) + "</span>" : "—";
     }
 
     var html = '<table class="data-table contracts-table"><thead><tr><th>供应商</th><th>流转状态</th><th>供应商签约主体</th><th>我方签约主体</th><th>收款人全称</th><th>开户行</th><th>银行账号</th><th>开始日期</th><th>结束日期</th><th>附件</th><th>操作</th></tr></thead><tbody>';
@@ -2311,11 +2315,11 @@
         html += '<td rowspan="' + r.count + '" class="ct-sup-cell"><div class="ct-sup-name">' + esc(supplierName(r.sid)) + '</div><div class="ct-sup-count">共 ' + r.count + " 份</div></td>";
       }
       html += "<td>" + flowBtnHtml(ct) + "</td>";
-      html += "<td>" + esc(ct.supplierParty || "—") + "</td>";
-      html += "<td>" + esc(ct.ourParty || "—") + "</td>";
-      html += "<td>" + copyCell(ct, "payeeName") + "</td>";
-      html += "<td>" + copyCell(ct, "bankName") + "</td>";
-      html += "<td>" + copyCell(ct, "bankAccount") + "</td>";
+      html += "<td>" + textCell(ct.supplierParty) + "</td>";
+      html += "<td>" + textCell(ct.ourParty) + "</td>";
+      html += '<td class="cc-payee">' + copyCell(ct, "payeeName") + "</td>";
+      html += '<td class="cc-bank">' + copyCell(ct, "bankName") + "</td>";
+      html += '<td class="cc-account">' + copyCell(ct, "bankAccount") + "</td>";
       html += "<td>" + esc(ct.startDate || "—") + "</td>";
       html += "<td>" + esc(ct.endDate || "—") + "</td>";
       html += "<td>" + ((ct.files || []).length ? '<button class="file-chip" data-files="' + ct.id + '">📎 ' + ct.files.length + " 个</button>" : '<button class="link-btn" data-files="' + ct.id + '">上传</button>') + "</td>";

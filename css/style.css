@@ -599,13 +599,21 @@ body[data-theme="dark"] .pending-row { background: #151c25; }
 .contracts-table tbody tr:first-child.ct-group-start td { border-top: none; }
 body[data-theme="dark"] .contracts-table td.ct-sup-cell { background: rgba(47,107,255,.12); }
 
-/* 收款信息单元格：值 + 一键复制 */
-.copy-cell { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.copy-cell > span { color: var(--text); }
+/* 收款信息单元格：值 + 一键复制（按钮统一右对齐，列宽按本列最长内容统一） */
+.copy-cell { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; }
+.copy-cell > span {
+  color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 300px;
+}
 .copy-btn {
   flex-shrink: 0;
-  display: inline-flex; align-items: center;
-  padding: 2px 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 48px;
+  padding: 3px 10px;
   font-size: 12px; line-height: 1.5;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -616,6 +624,18 @@ body[data-theme="dark"] .contracts-table td.ct-sup-cell { background: rgba(47,10
 }
 .copy-btn:hover { background: var(--primary-soft); border-color: var(--primary); }
 .copy-btn:active { transform: translateY(1px); }
+/* 收款三列：按最长内容统一列宽，保证各行复制按钮对齐 */
+.contracts-table td.cc-payee, .contracts-table td.cc-bank { min-width: 180px; }
+.contracts-table td.cc-account { min-width: 230px; }
+/* 主体/名称类长文本：超长省略，悬停可见全文 */
+.cell-nowrap {
+  display: inline-block;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
 
 /* ---------- 合同表单：我方主体单选 ---------- */
 .select-with-add select { width: 100%; }
