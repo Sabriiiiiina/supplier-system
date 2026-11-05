@@ -46,16 +46,64 @@
     try { document.execCommand("copy"); } catch (e) {}
     ta.remove(); cb && cb();
   }
-  function readFiles(input, cb) {
+  /* ---------- 附件云端存储（cloud.storage runtime 桶） ---------- */
+  function fileStoragePrefix() {
+    var uid = (session && session.user && (session.user.id || session.user.sub)) || "anon";
+    return "users/" + String(uid).replace(/[^A-Za-z0-9._-]/g, "_") + "/spm";
+  }
+  function hasCloudStorage() { return !!(cloud && cloud.storage); }
+  function b64ToBlob(b64, type) {
+    var bin = atob(b64);
+    var arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: type || "application/octet-stream" });
+  }
+  // 取附件 DataURL：优先内存缓存；storagePath 则从云端下载（结果缓存在 f.dataUrl）
+  function fileDataUrlAsync(f) {
+    if (f.dataUrl) return Promise.resolve(f.dataUrl);
+    if (f.storagePath && hasCloudStorage()) {
+      return cloud.storage.runtime.download(f.storagePath).then(function (res) {
+        if (res.error || !res.data) return null;
+        var blob = res.data;
+        return new Promise(function (resolve) {
+          var r = new FileReader();
+          r.onload = function () { f.dataUrl = r.result; resolve(r.result); };
+          r.onerror = function () { resolve(null); };
+          r.readAsDataURL(blob);
+        });
+      }).catch(function () { return null; });
+    }
+    return Promise.resolve(null);
+  }
+  // 上传文件到云端存储；成功返回 storagePath，失败返回 null（降级为本地 base64）
+  function uploadFileToStorage(uploadDir, file) {
+    if (!hasCloudStorage() || !uploadDir) return Promise.resolve(null);
+    var ext = String(file.name || "").toLowerCase().split(".").pop().replace(/[^a-z0-9]/g, "").slice(0, 10);
+    var path = fileStoragePrefix() + "/" + uploadDir + "/" + uid() + (ext ? "." + ext : "");
+    return cloud.storage.runtime.upload(path, file).then(function (res) {
+      if (!res.error && res.data) return path;
+      return null;
+    }).catch(function () { return null; });
+  }
+  function readFiles(input, uploadDir, cb) {
     var files = Array.prototype.slice.call(input.files || []);
-    var out = [], done = 0;
     if (!files.length) { cb([]); return; }
-    files.forEach(function (f) {
-      if (f.size > 5 * 1024 * 1024) { toast("文件「" + f.name + "」超过 5MB，已跳过"); done++; if (done === files.length) cb(out); return; }
-      var r = new FileReader();
-      r.onload = function () { out.push({ name: f.name, size: f.size, type: f.type, dataUrl: r.result }); done++; if (done === files.length) cb(out); };
-      r.onerror = function () { done++; if (done === files.length) cb(out); };
-      r.readAsDataURL(f);
+    var out = new Array(files.length), pending = 0;
+    function done() { pending--; if (pending <= 0) cb(out.filter(function (x) { return !!x; })); }
+    files.forEach(function (f, idx) {
+      if (f.size > 5 * 1024 * 1024) { toast("文件「" + f.name + "」超过 5MB，已跳过"); return; }
+      pending++;
+      var meta = { name: f.name, size: f.size, type: f.type };
+      function fallback() {
+        var r = new FileReader();
+        r.onload = function () { out[idx] = Object.assign({}, meta, { dataUrl: r.result }); done(); };
+        r.onerror = function () { done(); };
+        r.readAsDataURL(f);
+      }
+      uploadFileToStorage(uploadDir, f).then(function (path) {
+        if (path) { out[idx] = Object.assign({}, meta, { storagePath: path }); done(); }
+        else fallback();
+      });
     });
   }
   function fmtSize(n) {
@@ -136,14 +184,37 @@
     }, 600);
   }
 
+  // 云端主数据瘦身：
+  // 1) 已存云存储的附件（storagePath）不带 dataUrl 缓存；
+  // 2) 尚未迁移的 base64 附件：dataUrl 不进主数据（避免请求体超限），打 _pendingUpload 标记，
+  //    内容由 localStorage 备份 + 后台迁移到云存储保证（见 migrateFilesToStorage）
+  function stripCachedDataUrls(val) {
+    try {
+      var obj = JSON.parse(JSON.stringify(val));
+      (function walk(x) {
+        if (Array.isArray(x)) { x.forEach(walk); return; }
+        if (x && typeof x === "object") {
+          if (x.storagePath && typeof x.dataUrl === "string") { delete x.dataUrl; delete x._pendingUpload; }
+          else if (x.dataUrl && typeof x.dataUrl === "string" && typeof x.name === "string") {
+            delete x.dataUrl;
+            x._pendingUpload = true;
+          }
+          for (var k in x) walk(x[k]);
+        }
+      })(obj);
+      return obj;
+    } catch (e) { return val; }
+  }
   function persistNow(key, val) {
     if (!cloud) return;
     cloud.database.from("spm_state")
-      .upsert({ key: key, data: val == null ? {} : val, updated_at: new Date().toISOString() })
+      .upsert({ key: key, data: stripCachedDataUrls(val), updated_at: new Date().toISOString() })
       .select("updated_at")
       .then(function (res) {
         if (res.error) { toast("保存失败：" + (res.error.message || "云端异常")); return; }
         if (res.data && res.data[0]) cacheMeta[key] = res.data[0].updated_at;
+        // 保存成功后顺带推进历史附件迁移（幂等，无待迁移附件时立即返回）
+        setTimeout(migrateFilesToStorage, 1200);
       })
       .catch(function () { toast("保存失败：网络异常，请稍后重试"); });
   }
@@ -228,6 +299,126 @@
     }
   }
 
+  /* ================= 历史附件迁移（base64 → 云存储） ================= */
+  var ATTACH_BACKUP_KEY = "spm_attach_backup_v1";
+  var migrationBackup = null;
+
+  function backupKeyOf(dir, f) { return dir + "|" + (f.name || "") + "|" + (f.size || 0); }
+  function loadBackup() {
+    if (!migrationBackup) {
+      migrationBackup = loadLocal(ATTACH_BACKUP_KEY, {});
+      if (!migrationBackup || typeof migrationBackup !== "object") migrationBackup = {};
+    }
+    return migrationBackup;
+  }
+  function persistBackup() {
+    var bak = loadBackup();
+    var n = 0; for (var k in bak) { n++; break; }
+    try {
+      if (n) localStorage.setItem(ATTACH_BACKUP_KEY, JSON.stringify(bak));
+      else { localStorage.removeItem(ATTACH_BACKUP_KEY); migrationBackup = null; }
+    } catch (e) { /* 本地存储满：备份失败时迁移过程会因 upload 成功才删数据，风险可控 */ }
+  }
+  function removeBackupEntry(dir, f) {
+    var bak = loadBackup();
+    var k = backupKeyOf(dir, f);
+    if (bak[k]) { delete bak[k]; persistBackup(); }
+  }
+
+  // 收集所有附件组：[存储目录, 附件数组]
+  function collectAttachments(out) {
+    contracts.forEach(function (ct) { out.push(["contracts/" + ct.id, ct.files]); });
+    demands.forEach(function (d) {
+      out.push(["demands/" + d.id, d.scheduleFiles]);
+      if (d.settlement) {
+        out.push(["demands/" + d.id + "/settle", d.settlement.settleFiles]);
+        out.push(["demands/" + d.id + "/invoice", d.settlement.invoiceFiles]);
+      }
+    });
+    suppliers.forEach(function (sp) {
+      out.push(["suppliers/" + sp.id, sp.introFiles]);
+      out.push(["suppliers/" + sp.id + "/license", sp.licenseFiles]);
+    });
+  }
+
+  // 启动时恢复：云端数据中 _pendingUpload 附件（内容被剥离）从本地备份回填 dataUrl
+  function restorePendingAttachments() {
+    var bak = loadBackup();
+    var has = false; for (var k in bak) { has = true; break; }
+    if (!has) return;
+    var groups = [];
+    collectAttachments(groups);
+    groups.forEach(function (g) {
+      (g[1] || []).forEach(function (f) {
+        if (f._pendingUpload && !f.storagePath && !f.dataUrl) {
+          var v = bak[backupKeyOf(g[0], f)];
+          if (v) { f.dataUrl = v; delete f._pendingUpload; }
+        }
+      });
+    });
+  }
+
+  // 历史 base64 附件迁移：上传到云存储并替换为 storagePath（后台静默执行）
+  function migrateFilesToStorage() {
+    if (window.__migRunning) return;
+    if (!hasCloudStorage() || !session || !session.user || !(session.user.id || session.user.sub)) return;
+    var groups = [];
+    collectAttachments(groups);
+    var targets = [];
+    groups.forEach(function (g) {
+      (g[1] || []).forEach(function (f) {
+        if (!f.storagePath && f.dataUrl) targets.push({ f: f, dir: g[0], tries: 0 });
+      });
+    });
+    if (!targets.length) return;
+    window.__migRunning = true;
+    // 备份所有待迁移附件内容到 localStorage（上传失败/中途刷新也不丢数据）
+    var bak = loadBackup();
+    var bakChanged = false;
+    targets.forEach(function (t) {
+      var k = backupKeyOf(t.dir, t.f);
+      if (t.f.dataUrl && bak[k] !== t.f.dataUrl) { bak[k] = t.f.dataUrl; bakChanged = true; }
+    });
+    if (bakChanged) { persistBackup(); toast("正在同步 " + targets.length + " 个历史附件到云端（自动完成，期间可正常使用）"); }
+    var changed = false;
+    var removedKeys = [];
+    function next() {
+      var t = targets.shift();
+      if (!t) {
+        window.__migRunning = false;
+        if (removedKeys.length) {
+          removedKeys.forEach(function (k) { if (bak[k]) delete bak[k]; });
+          persistBackup();
+        }
+        if (changed) { saveContracts(); saveDemands(); saveSuppliers(); }
+        return;
+      }
+      var b64 = String(t.f.dataUrl || "").split(",")[1];
+      if (!b64) { next(); return; }
+      var ext = String(t.f.name || "").toLowerCase().split(".").pop().replace(/[^a-z0-9]/g, "").slice(0, 10);
+      var path = fileStoragePrefix() + "/" + t.dir + "/" + uid() + (ext ? "." + ext : "");
+      var blob = b64ToBlob(b64, t.f.type);
+      cloud.storage.runtime.upload(path, blob).then(function (res) {
+        if (!res.error && res.data) {
+          t.f.storagePath = path;
+          delete t.f.dataUrl;
+          delete t.f._pendingUpload;
+          removedKeys.push(backupKeyOf(t.dir, t.f));
+          changed = true;
+        } else {
+          t.tries++;
+          if (t.tries < 3) targets.push(t); else t.f._pendingUpload = true;
+        }
+        next();
+      }).catch(function () {
+        t.tries++;
+        if (t.tries < 3) targets.push(t); else t.f._pendingUpload = true;
+        next();
+      });
+    }
+    next();
+  }
+
   async function enterApp() {
     var cfgProbe = await cloudLoad(KEYS.config, {});
     if (cfgProbe.meta === null && hasLocalData()) {
@@ -235,6 +426,7 @@
       await migrateLocalToCloud();
     }
     await loadAllFromCloud();
+    restorePendingAttachments();
 
     buildDesignerUI();
     applyDesign();
@@ -244,6 +436,7 @@
     if (!location.hash) location.hash = "#/dashboard";
     render();
     startSync();
+    migrateFilesToStorage();
   }
 
   function saveConfig() {
@@ -502,7 +695,7 @@
   function getGroupValues(root, groupName) {
     return Array.prototype.slice.call(root.querySelectorAll('input[type="checkbox"][name="' + groupName + '"]:checked')).map(function (c) { return c.value; });
   }
-  function fileField(filesArr, onChange) {
+  function fileField(filesArr, onChange, uploadDir) {
     var wrap = el("div");
     function draw() {
       wrap.innerHTML = "";
@@ -516,16 +709,31 @@
           pv.addEventListener("click", function () { openFilePreview(f); });
           chip.appendChild(pv);
         }
-        var dl = el("a"); dl.textContent = "下载"; dl.href = f.dataUrl; dl.download = f.name; dl.target = "_blank";
+        var dl = el("a"); dl.textContent = "下载"; dl.style.cursor = "pointer";
+        dl.addEventListener("click", function () {
+          fileDataUrlAsync(f).then(function (durl) {
+            if (!durl) { toast("附件下载失败，请稍后重试"); return; }
+            var a = document.createElement("a");
+            a.href = durl; a.download = f.name || "附件";
+            document.body.appendChild(a); a.click(); a.remove();
+          });
+        });
         var rm = el("a"); rm.textContent = "移除"; rm.style.cursor = "pointer";
-        rm.addEventListener("click", function () { filesArr.splice(i, 1); onChange(filesArr); draw(); });
+        rm.addEventListener("click", function () {
+          var removed = filesArr.splice(i, 1)[0];
+          if (removed && removed.storagePath && hasCloudStorage()) {
+            cloud.storage.runtime.remove([removed.storagePath]).catch(function () {});
+          }
+          removeBackupEntry(uploadDir, removed);
+          onChange(filesArr); draw();
+        });
         chip.appendChild(dl); chip.appendChild(rm);
         list.appendChild(chip);
       });
       var add = el("label", "file-add"); add.appendChild(document.createTextNode("📎 上传附件"));
       var inp = el("input"); inp.type = "file"; inp.multiple = true; add.appendChild(inp);
       inp.addEventListener("change", function () {
-        readFiles(inp, function (nf) { if (nf.length) { filesArr = filesArr.concat(nf); onChange(filesArr); draw(); } });
+        readFiles(inp, uploadDir, function (nf) { if (nf.length) { filesArr = filesArr.concat(nf); onChange(filesArr); draw(); } });
       });
       wrap.appendChild(list); wrap.appendChild(add);
       wrap.appendChild(el("div", "file-hint", "图片/文档均可，单个不超过 5MB；上传合同文件（docx/PDF）可自动识别正文信息"));
@@ -702,30 +910,7 @@
     if (!kind) { toast("该格式暂不支持在线预览，请下载查看"); return; }
     closeFilePreview();
     var body = el("div");
-    if (kind === "img") {
-      var img = document.createElement("img");
-      img.src = f.dataUrl; img.className = "file-preview-img"; img.alt = f.name;
-      body.appendChild(img);
-    } else if (kind === "pdf") {
-      var frame = document.createElement("iframe");
-      frame.src = f.dataUrl; frame.className = "file-preview-frame"; frame.title = f.name;
-      body.appendChild(frame);
-      body.appendChild(el("div", "muted", "如无法显示，请点击下方「下载」后打开"));
-    } else if (kind === "sheet") {
-      var box = el("div", "file-preview-sheet");
-      var html = sheetTableFromDataUrl(f.dataUrl);
-      if (html) { box.innerHTML = html; }
-      else { box.appendChild(el("div", "muted", "表格解析失败，请下载查看")); }
-      body.appendChild(box);
-    } else {
-      var pre = document.createElement("pre");
-      pre.className = "file-preview-pre";
-      try {
-        var b64 = String(f.dataUrl || "").split(",")[1] || "";
-        pre.textContent = b64 ? decodeURIComponent(escape(atob(b64))) : "（空文件）";
-      } catch (e) { pre.textContent = "文本读取失败，请下载查看"; }
-      body.appendChild(pre);
-    }
+    body.appendChild(el("div", "muted", "附件加载中…"));
     var ov = el("div", "modal-overlay show");
     ov.addEventListener("click", function (e) { if (e.target === ov) closeFilePreview(); });
     var m = el("div", "modal open preview-modal");
@@ -737,9 +922,12 @@
     var foot = el("div", "modal-foot");
     var dl = el("button", "btn btn-ghost", "下载");
     dl.addEventListener("click", function () {
-      var a = document.createElement("a");
-      a.href = f.dataUrl; a.download = f.name || "附件";
-      document.body.appendChild(a); a.click(); a.remove();
+      fileDataUrlAsync(f).then(function (durl) {
+        if (!durl) { toast("附件下载失败，请稍后重试"); return; }
+        var a = document.createElement("a");
+        a.href = durl; a.download = f.name || "附件";
+        document.body.appendChild(a); a.click(); a.remove();
+      });
     });
     foot.appendChild(dl);
     var closeBtn = el("button", "btn btn-primary", "关闭");
@@ -749,9 +937,41 @@
     ov.appendChild(m);
     document.body.appendChild(ov);
     pvOverlay = ov;
+    fileDataUrlAsync(f).then(function (durl) {
+      if (!pvOverlay || pvOverlay !== ov) return; // 已关闭
+      body.innerHTML = "";
+      if (!durl) {
+        body.appendChild(el("div", "muted", "附件加载失败，请点击「下载」重试"));
+        return;
+      }
+      if (kind === "img") {
+        var img = document.createElement("img");
+        img.src = durl; img.className = "file-preview-img"; img.alt = f.name;
+        body.appendChild(img);
+      } else if (kind === "pdf") {
+        var frame = document.createElement("iframe");
+        frame.src = durl; frame.className = "file-preview-frame"; frame.title = f.name;
+        body.appendChild(frame);
+        body.appendChild(el("div", "muted", "如无法显示，请点击下方「下载」后打开"));
+      } else if (kind === "sheet") {
+        var box = el("div", "file-preview-sheet");
+        var html = sheetTableFromDataUrl(durl);
+        if (html) { box.innerHTML = html; }
+        else { box.appendChild(el("div", "muted", "表格解析失败，请下载查看")); }
+        body.appendChild(box);
+      } else {
+        var pre = document.createElement("pre");
+        pre.className = "file-preview-pre";
+        try {
+          var b64 = String(durl || "").split(",")[1] || "";
+          pre.textContent = b64 ? decodeURIComponent(escape(atob(b64))) : "（空文件）";
+        } catch (e) { pre.textContent = "文本读取失败，请下载查看"; }
+        body.appendChild(pre);
+      }
+    });
   }
   // 通用附件管理弹窗：预览/下载/删除/追加上传
-  function openFileManager(title, filesArr, onChanged, afterClose, hint, onAdd) {
+  function openFileManager(title, filesArr, onChanged, afterClose, hint, onAdd, uploadDir) {
     if (!Array.isArray(filesArr)) return;
     var body = el("div");
     if (hint) body.appendChild(el("div", "muted", hint));
@@ -770,14 +990,21 @@
       }
       var dl = el("button", "link-btn", "下载");
       dl.addEventListener("click", function () {
-        var a = document.createElement("a");
-        a.href = f.dataUrl; a.download = f.name || "附件";
-        document.body.appendChild(a); a.click(); a.remove();
+        fileDataUrlAsync(f).then(function (durl) {
+          if (!durl) { toast("附件下载失败，请稍后重试"); return; }
+          var a = document.createElement("a");
+          a.href = durl; a.download = f.name || "附件";
+          document.body.appendChild(a); a.click(); a.remove();
+        });
       });
       var del = el("button", "link-btn danger", "删除");
       del.addEventListener("click", function () {
         confirmDialog("删除确认", "确定删除该附件吗？", function () {
-          filesArr.splice(idx, 1);
+          var removed = filesArr.splice(idx, 1)[0];
+          if (removed && removed.storagePath && hasCloudStorage()) {
+            cloud.storage.runtime.remove([removed.storagePath]).catch(function () {});
+          }
+          removeBackupEntry(uploadDir, removed);
           if (onChanged) onChanged();
           rebuild();
           toast("附件已删除");
@@ -801,7 +1028,7 @@
     var fInput = document.createElement("input");
     fInput.type = "file"; fInput.multiple = true; fInput.style.display = "none";
     fInput.addEventListener("change", function () {
-      readFiles(fInput, function (arr) {
+      readFiles(fInput, uploadDir, function (arr) {
         arr.forEach(function (f) { filesArr.push(f); if (onAdd) onAdd(f); });
         if (onChanged) onChanged();
         rebuild();
@@ -828,7 +1055,7 @@
   }
   function openScheduleFiles(d) {
     if (!Array.isArray(d.scheduleFiles)) d.scheduleFiles = [];
-    openFileManager("排期报价表", d.scheduleFiles, saveDemands, renderDispatch, "需求：" + (d.name || "") + " · 点击「预览」可在线查看，无需下载");
+    openFileManager("排期报价表", d.scheduleFiles, saveDemands, renderDispatch, "需求：" + (d.name || "") + " · 点击「预览」可在线查看，无需下载", null, "demands/" + d.id);
   }
 
   /* ================= 合同正文识别（甲方/乙方） ================= */
@@ -1353,6 +1580,27 @@
   function parseContractFile(f, cb) {
     var ext = String(f.name || "").toLowerCase().split(".").pop();
     var b64 = String(f.dataUrl || "").split(",")[1] || "";
+    function go(b64) {
+      parseWithBytes(ext, b64, cb);
+    }
+    if (b64) { go(b64); return; }
+    if (f.storagePath && hasCloudStorage()) {
+      cloud.storage.runtime.download(f.storagePath).then(function (res) {
+        if (res.error || !res.data) { cb(null); return; }
+        var blob = res.data;
+        var r = new FileReader();
+        r.onload = function () {
+          var b2 = String(r.result || "").split(",")[1] || "";
+          go(b2);
+        };
+        r.onerror = function () { cb(null); };
+        r.readAsDataURL(blob);
+      }).catch(function () { cb(null); });
+      return;
+    }
+    cb(null);
+  }
+  function parseWithBytes(ext, b64, cb) {
     if (!b64) { cb(null); return; }
     function bytes() {
       var bin = atob(b64);
@@ -1463,7 +1711,7 @@
     grid.appendChild(fieldRow("合作项目", makeCheckboxGroup(config.projects, initial.projects || [], "sp_projects"), false, true));
 
     var introFiles = (initial.introFiles || []).slice();
-    var introField = fieldRow("公司介绍资料", fileField(introFiles, function (f) { introFiles = f; }), false, true);
+    var introField = fieldRow("公司介绍资料", fileField(introFiles, function (f) { introFiles = f; }, "suppliers/" + (initial.id || "new")), false, true);
     grid.appendChild(introField);
 
     grid.appendChild(fieldRow("银行账号", makeInput("text", "bankAccount", initial.bankAccount)));
@@ -1471,7 +1719,7 @@
     grid.appendChild(fieldRow("收款方", makeInput("text", "payee", initial.payee)));
 
     var licFiles = (initial.licenseFiles || []).slice();
-    var licField = fieldRow("营业执照", fileField(licFiles, function (f) { licFiles = f; }), false, true);
+    var licField = fieldRow("营业执照", fileField(licFiles, function (f) { licFiles = f; }, "suppliers/" + (initial.id || "new")), false, true);
     grid.appendChild(licField);
 
     if (!isSelfService) {
@@ -1546,7 +1794,7 @@
     }
 
     if (isCreate) {
-      grid.appendChild(fieldRow("排期报价表（附件）", fileField(schedFiles, onSchedFilesChange), false, true));
+      grid.appendChild(fieldRow("排期报价表（附件）", fileField(schedFiles, onSchedFilesChange, "demands/" + (d ? d.id : "new")), false, true));
       grid.appendChild(fieldRow("开始时间", makeInput("date", "dispatchDate", "")));
       grid.appendChild(fieldRow("DDL", makeInput("date", "ddl", "")));
       var amountField = el("div", "form-field");
@@ -1565,7 +1813,7 @@
       grid.appendChild(fieldRow("DDL", makeInput("date", "ddl", d.ddl)));
       grid.appendChild(fieldRow("供应商", makeSelect("supplier", suppliers.map(function (s) { return { value: s.id, label: s.name }; }), d.supplierId, "请选择供应商")));
 
-      grid.appendChild(fieldRow("排期报价表（附件）", fileField(schedFiles, onSchedFilesChange), false, true));
+      grid.appendChild(fieldRow("排期报价表（附件）", fileField(schedFiles, onSchedFilesChange, "demands/" + (d ? d.id : "new")), false, true));
 
       var amountField = el("div", "form-field");
       var amountWrap = el("div"); amountWrap.style.cssText = "display:flex;gap:8px;";
@@ -1787,7 +2035,7 @@
         });
       });
     }
-    grid.appendChild(fieldRow("合同附件", fileField(ctFiles, onContractFilesChange), false, true));
+    grid.appendChild(fieldRow("合同附件", fileField(ctFiles, onContractFilesChange, "contracts/" + (c && c.id ? c.id : "new")), false, true));
     function collect() {
       var out = {
         supplierParty: grid.querySelector('[data-key="supplierParty"]').value.trim(),
@@ -2509,7 +2757,7 @@
           toast("识别到：" + conflicts.join("、") + "，但合同已有值未覆盖，请核对后手动修改");
         }
       });
-    });
+    }, "contracts/" + ct.id);
   }
 
   // 合同流转：点击一次推进到下一流程
@@ -2689,8 +2937,8 @@
     var grid = el("div", "form-grid");
     var sf = (d.settlement.settleFiles || []).slice();
     var iff = (d.settlement.invoiceFiles || []).slice();
-    grid.appendChild(fieldRow("结算单（附件）", fileField(sf, function (f) { sf = f; }), false, true));
-    grid.appendChild(fieldRow("发票（附件）", fileField(iff, function (f) { iff = f; }), false, true));
+    grid.appendChild(fieldRow("结算单（附件）", fileField(sf, function (f) { sf = f; }, "demands/" + d.id + "/settle"), false, true));
+    grid.appendChild(fieldRow("发票（附件）", fileField(iff, function (f) { iff = f; }, "demands/" + d.id + "/invoice"), false, true));
     body.appendChild(grid);
     var cancel = el("button", "btn btn-ghost", "关闭"); cancel.addEventListener("click", closeModal);
     var save = el("button", "btn btn-primary", "保存附件");
@@ -3397,6 +3645,40 @@
     renderDispatch: renderDispatch,
     parseScheduleFile: parseScheduleFile,
     parseContractFile: parseContractFile,
+    getContracts: function () { return contracts; },
+    getSuppliers: function () { return suppliers; },
+    getDemands: function () { return demands; },
+    uploadFileToStorage: uploadFileToStorage,
+    migrateFilesToStorage: migrateFilesToStorage,
+    restorePendingAttachments: restorePendingAttachments,
+    stripCachedDataUrls: stripCachedDataUrls,
+    // 诊断：注入内存版云存储（本地逻辑验证用，不影响生产）
+    mockStorage: function () {
+      var store = {};
+      cloud = {
+        storage: {
+          runtime: {
+            upload: function (path, blob) {
+              return new Promise(function (res) {
+                store[path] = blob;
+                res({ data: { path: path }, error: null });
+              });
+            },
+            download: function (path) {
+              return Promise.resolve(store[path]
+                ? { data: store[path], error: null }
+                : { data: null, error: { message: "not found" } });
+            },
+            remove: function (paths) {
+              (paths || []).forEach(function (p) { delete store[p]; });
+              return Promise.resolve({ data: null, error: null });
+            }
+          }
+        },
+        database: null
+      };
+      window.__mockStore = store;
+    },
     getState: function () {
       return {
         session: !!session,
