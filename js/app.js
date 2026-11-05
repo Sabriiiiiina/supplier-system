@@ -1050,17 +1050,28 @@
       if (m) out.payeeName = goodPayeeName(cutBankValue(m[1]));
     }
     var bankTags = ["开户银行", "开户行", "开户支行", "收款银行", "银行名称"];
+    var bankRaw = "";
     for (i = 0; i < bankTags.length && !out.bankName; i++) {
       m = t.match(new RegExp(bankTags[i] + "[：:\\s]*([^\\n，,。;；、]{2,60})"));
-      if (m) out.bankName = goodBankName(cutBankValue(m[1]));
+      if (m) {
+        var bv = cutBankValue(m[1]);
+        if (!bankRaw) bankRaw = bv;
+        out.bankName = goodBankName(bv);
+      }
+    }
+    // 标签写反纠正：开户行值像公司名、账户名值像银行名时交换（合同常见笔误）
+    if (!out.bankName && bankRaw && out.payeeName && goodPayeeName(bankRaw) && goodBankName(out.payeeName)) {
+      out.bankName = out.payeeName;
+      out.payeeName = goodPayeeName(bankRaw);
     }
     var accRe = new RegExp("(" + BANK_TAG_RE + ")[：:\\s]*([0-9][0-9\\s\\-·.]{4,45})", "g");
     while ((m = accRe.exec(t))) {
       var tag = m[1], val = cleanAccountValue(m[2]);
       if (!val) continue;
       if (!inSegment && /^(账号|帐号|卡号)$/.test(tag)) {
-        var ctx = t.slice(Math.max(0, m.index - 12), m.index);
-        if (!/(银行|收款|开户|账户|帐号)/.test(ctx)) continue;
+        // 裸标签防误判：前文 40 字符含银行/收款/开户/账户关键词，或本段已提取到收款人/开户行（同一收款信息块内）
+        var win = t.slice(Math.max(0, m.index - 40), m.index);
+        if (!/(银行|收款|开户|账户)/.test(win) && !out.payeeName && !out.bankName) continue;
       }
       out.bankAccount = val;
       break;
@@ -1071,12 +1082,18 @@
     var out = { payeeName: "", bankName: "", bankAccount: "" };
     if (!text) return out;
     var t = String(text).replace(/\r/g, "").replace(/\u3000/g, " ");
+    // 繁体/异体字归一化：帐(U+5E10)/帳(U+5E33)/賬(U+8CAC)→账；戸/戶→户（合同常见"帐号/帐户名"写法）
+    t = t.replace(/[\u5E10\u5E33\u8CAC]/g, "账").replace(/[\u6236\u6237\u6238]/g, "户");
     // 标签后换行（含"标签：\n值"、"标签\n值"、docx 表格"标签\n(空行)\n值"）合并到同一行
     t = t.replace(new RegExp("(" + BANK_TAG_RE + ")[：: \\t\\u3000]*\\n(?:[ \\t\\u3000]*\\n)?[ \\t\\u3000]*", "g"), "$1：");
     // 找到收款账户信息段落时，严格只用该段落提取（三字段在一起），绝不全文兜底防误识别
     var seg = findBankSegment(t);
     if (seg) return extractBankFromText(seg, true);
-    return extractBankFromText(t, false);
+    // 无段落标题兜底：从"乙方"首次出现之后提取（甲方信息块通常在乙方定义之前，防误取甲方户名）
+    var t2 = t;
+    var yiIdx = t2.indexOf("乙方");
+    if (yiIdx > 0) t2 = t2.slice(yiIdx);
+    return extractBankFromText(t2, false);
   }
   /* 合同文档含多份协议时（如 保密协议 + 外包制作框架合作），聚焦"外包制作框架合作"标题之后的正文 */
   function focusFrame(text) {
@@ -1093,7 +1110,7 @@
   }
   /* xlsx/csv 表格解析：支持横向表头（表头行+数据行）与纵向（标签 值）两种布局 */
   function gridCellText(v) {
-    return v == null ? "" : String(v).trim();
+    return v == null ? "" : String(v).replace(/[\u5E10\u5E33\u8CAC]/g, "账").replace(/[\u6236\u6237\u6238]/g, "户").trim();
   }
   function gridTagKind(cell) {
     var s = gridCellText(cell).replace(/[：:\s]/g, "");
@@ -1518,19 +1535,30 @@
         var eInp = grid.querySelector('[data-key="endDate"]');
         if (eInp && !eInp.value) { eInp.value = res.endDate; changed.push("结束日期 " + res.endDate); }
       }
+      var conflicts = [];
       if (res.payeeName) {
         var pInp = grid.querySelector('[data-key="payeeName"]');
-        if (pInp && !pInp.value.trim()) { pInp.value = res.payeeName; changed.push("收款人全称「" + res.payeeName + "」"); }
+        if (pInp) {
+          if (!pInp.value.trim()) { pInp.value = res.payeeName; changed.push("收款人全称「" + res.payeeName + "」"); }
+          else if (pInp.value.trim() !== res.payeeName) conflicts.push("收款人全称「" + res.payeeName + "」");
+        }
       }
       if (res.bankName) {
         var bInp = grid.querySelector('[data-key="bankName"]');
-        if (bInp && !bInp.value.trim()) { bInp.value = res.bankName; changed.push("开户行「" + res.bankName + "」"); }
+        if (bInp) {
+          if (!bInp.value.trim()) { bInp.value = res.bankName; changed.push("开户行「" + res.bankName + "」"); }
+          else if (bInp.value.trim() !== res.bankName) conflicts.push("开户行「" + res.bankName + "」");
+        }
       }
       if (res.bankAccount) {
         var aInp = grid.querySelector('[data-key="bankAccount"]');
-        if (aInp && !aInp.value.trim()) { aInp.value = res.bankAccount; changed.push("银行账号 " + res.bankAccount); }
+        if (aInp) {
+          if (!aInp.value.trim()) { aInp.value = res.bankAccount; changed.push("银行账号 " + res.bankAccount); }
+          else if (aInp.value.trim() !== res.bankAccount) conflicts.push("银行账号 " + res.bankAccount);
+        }
       }
       if (changed.length) toast("已从「" + (fname || "附件") + "」识别：" + changed.join("、") + "，可手动修改");
+      else if (conflicts.length) toast("识别到：" + conflicts.join("、") + "，但表单已有值未覆盖，请核对后手动修改");
     }
     function onContractFilesChange(arr) {
       var added = arr.slice(lastFileCount);
@@ -2224,12 +2252,24 @@
         }
         if (res.startDate && !ct.startDate) { ct.startDate = res.startDate; changed.push("开始日期 " + res.startDate); }
         if (res.endDate && !ct.endDate) { ct.endDate = res.endDate; changed.push("结束日期 " + res.endDate); }
-        if (res.payeeName && !ct.payeeName) { ct.payeeName = res.payeeName; changed.push("收款人全称「" + res.payeeName + "」"); }
-        if (res.bankName && !ct.bankName) { ct.bankName = res.bankName; changed.push("开户行「" + res.bankName + "」"); }
-        if (res.bankAccount && !ct.bankAccount) { ct.bankAccount = res.bankAccount; changed.push("银行账号 " + res.bankAccount); }
+        var conflicts = [];
+        if (res.payeeName) {
+          if (!ct.payeeName) { ct.payeeName = res.payeeName; changed.push("收款人全称「" + res.payeeName + "」"); }
+          else if (ct.payeeName !== res.payeeName) conflicts.push("收款人全称「" + res.payeeName + "」");
+        }
+        if (res.bankName) {
+          if (!ct.bankName) { ct.bankName = res.bankName; changed.push("开户行「" + res.bankName + "」"); }
+          else if (ct.bankName !== res.bankName) conflicts.push("开户行「" + res.bankName + "」");
+        }
+        if (res.bankAccount) {
+          if (!ct.bankAccount) { ct.bankAccount = res.bankAccount; changed.push("银行账号 " + res.bankAccount); }
+          else if (ct.bankAccount !== res.bankAccount) conflicts.push("银行账号 " + res.bankAccount);
+        }
         if (changed.length) {
           saveContracts(); renderContracts();
           toast("已从「" + f.name + "」识别：" + changed.join("、") + "，可在编辑中修改");
+        } else if (conflicts.length) {
+          toast("识别到：" + conflicts.join("、") + "，但合同已有值未覆盖，请核对后手动修改");
         }
       });
     });
