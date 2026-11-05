@@ -751,7 +751,7 @@
     pvOverlay = ov;
   }
   // 通用附件管理弹窗：预览/下载/删除/追加上传
-  function openFileManager(title, filesArr, onChanged, afterClose, hint) {
+  function openFileManager(title, filesArr, onChanged, afterClose, hint, onAdd) {
     if (!Array.isArray(filesArr)) return;
     var body = el("div");
     if (hint) body.appendChild(el("div", "muted", hint));
@@ -802,7 +802,7 @@
     fInput.type = "file"; fInput.multiple = true; fInput.style.display = "none";
     fInput.addEventListener("change", function () {
       readFiles(fInput, function (arr) {
-        arr.forEach(function (f) { filesArr.push(f); });
+        arr.forEach(function (f) { filesArr.push(f); if (onAdd) onAdd(f); });
         if (onChanged) onChanged();
         rebuild();
         toast("已添加 " + arr.length + " 个附件");
@@ -829,6 +829,172 @@
   function openScheduleFiles(d) {
     if (!Array.isArray(d.scheduleFiles)) d.scheduleFiles = [];
     openFileManager("排期报价表", d.scheduleFiles, saveDemands, renderDispatch, "需求：" + (d.name || "") + " · 点击「预览」可在线查看，无需下载");
+  }
+
+  /* ================= 合同正文识别（甲方/乙方） ================= */
+  function decodeTextBytes(u8) {
+    var s = new TextDecoder("utf-8").decode(u8);
+    if (s.indexOf("\uFFFD") >= 0) {
+      try { s = new TextDecoder("gbk").decode(u8); } catch (e) { }
+    }
+    return s;
+  }
+  function cleanPartyCandidate(s) {
+    s = String(s || "").replace(/\r/g, "");
+    s = s.replace(/^[：:\s\u3000]+/, "");
+    // 截断到下一个"甲方：/乙方（xx）："出现处（PDF 文本行合并时会连在一起）
+    s = s.split(/[甲乙]方(?:[（(][^）)\n:：]{0,10}[）)])?[：:]/)[0];
+    s = s.replace(/(?:地址|住所|统一社会信用代码|法定代表人|联系人|联系电话|电话|开户行|银行账号|账号|签订日期|签订地点|邮编|传真|邮箱).*$/, "");
+    s = s.replace(/[（(]?以下简称[“"'‘’]?[甲乙]方[”"']?[）)]?.*$/, "");
+    s = s.replace(/[（(][^（）()]*[）)]\s*$/g, function (full) {
+      var inner = full.slice(1, -1);
+      if (/甲|乙|委托|受托|采购|需求|买方|卖方|供方|需方|盖章|公章|签字|签署|日期|章/.test(inner)) return "";
+      return full;
+    });
+    s = s.replace(/[，,。;；、\s]+$/, "");
+    s = s.replace(/^[为是系]+/, "");
+    if (s.length > 40) s = s.slice(0, 40);
+    return s.trim();
+  }
+  function extractParty(text, label) {
+    if (!text) return "";
+    var t = String(text).replace(/\r/g, "");
+    var re, m, r;
+    // 1) 甲方（委托方/全称）：名称
+    re = new RegExp(label + "[（(][^）)\\n:：]{0,8}[）)]?[：:]\\s*([^\\n，,。;；]{2,60})");
+    m = t.match(re);
+    if (m) { r = cleanPartyCandidate(m[1]); if (r && r !== label) return r; }
+    // 2) 甲方：名称（名称可换行）
+    re = new RegExp(label + "[：:]\\s*([^\\n]{1,60}?)(?=[，,。;；\\n]|$)", "g");
+    m = t.match(re);
+    if (m) { r = cleanPartyCandidate(m[0].replace(new RegExp("^" + label + "[：:]\\s*"), "")); if (r && r !== label) return r; }
+    // 3) 名称（以下简称"甲方"）
+    re = new RegExp("([^\\n，,。;；]{2,60}?)[（(]\\s*以下简称\\s*[“\"']?" + label);
+    m = t.match(re);
+    if (m) { r = cleanPartyCandidate(m[1]); if (r && r !== label) return r; }
+    // 4) 甲方为/系 名称
+    re = new RegExp(label + "\\s*[为系]\\s*([^\\n，,。;；]{2,40}(?:公司|工作室|团队|中心|事务所|研究院|集团|厂|店|社))");
+    m = t.match(re);
+    if (m) { r = cleanPartyCandidate(m[1]); if (r && r !== label) return r; }
+    return "";
+  }
+  // docx：最小 zip 解析 + DecompressionStream 解压 word/document.xml
+  function docxText(u8) {
+    return new Promise(function (resolve) {
+      try {
+        var dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+        var eocd = -1;
+        for (var i = u8.length - 22; i >= 0; i--) {
+          if (u8[i] === 0x50 && u8[i + 1] === 0x4b && u8[i + 2] === 0x05 && u8[i + 3] === 0x06) { eocd = i; break; }
+        }
+        if (eocd < 0) { resolve(""); return; }
+        var total = dv.getUint16(eocd + 10, true);
+        var cdSize = dv.getUint32(eocd + 12, true);
+        var cdOffset = dv.getUint32(eocd + 16, true);
+        var dec = new TextDecoder("utf-8");
+        var p = cdOffset;
+        var end = Math.min(cdOffset + cdSize, u8.length);
+        var entry = null;
+        for (var e = 0; e < total && p + 46 <= end; e++) {
+          if (dv.getUint32(p, true) !== 0x02014b50) break;
+          var method = dv.getUint16(p + 10, true);
+          var compSize = dv.getUint32(p + 20, true);
+          var nameLen = dv.getUint16(p + 28, true);
+          var extraLen = dv.getUint16(p + 30, true);
+          var commentLen = dv.getUint16(p + 32, true);
+          var lho = dv.getUint32(p + 42, true);
+          var name = dec.decode(u8.subarray(p + 46, p + 46 + nameLen));
+          if (name === "word/document.xml") {
+            var lp = lho;
+            var lNameLen = dv.getUint16(lp + 26, true);
+            var lExtraLen = dv.getUint16(lp + 28, true);
+            var ds = lp + 30 + lNameLen + lExtraLen;
+            entry = { method: method, comp: u8.subarray(ds, ds + compSize) };
+            break;
+          }
+          p += 46 + nameLen + extraLen + commentLen;
+        }
+        if (!entry) { resolve(""); return; }
+        function parseXml(buf) {
+          var xml = new TextDecoder("utf-8").decode(new Uint8Array(buf));
+          xml = xml.replace(/<w:p[ >]/g, "\n").replace(/<w:br\/>/g, "\n").replace(/<w:tab\/>/g, " ");
+          xml = xml.replace(/<[^>]+>/g, "");
+          var d = document.createElement("textarea");
+          d.innerHTML = xml;
+          return d.value;
+        }
+        if (entry.method === 0) {
+          resolve(parseXml(entry.comp.buffer.slice(entry.comp.byteOffset, entry.comp.byteOffset + entry.comp.byteLength)));
+        } else if (entry.method === 8) {
+          try {
+            var dsStream = new Blob([entry.comp]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+            new Response(dsStream).arrayBuffer().then(function (buf) { resolve(parseXml(buf)); }).catch(function () { resolve(""); });
+          } catch (e2) { resolve(""); }
+        } else { resolve(""); }
+      } catch (e) { resolve(""); }
+    });
+  }
+  // pdf：pdfjs 提取前 8 页文本（扫描件无文字层时返回空）
+  function pdfText(u8) {
+    return new Promise(function (resolve) {
+      if (!window.pdfjsLib) { resolve(""); return; }
+      try {
+        if (!window.__pdfWorkerSet) {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = "js/vendor/pdf.worker.min.js";
+          window.__pdfWorkerSet = true;
+        }
+        pdfjsLib.getDocument({ data: u8 }).promise.then(function (pdf) {
+          var max = Math.min(pdf.numPages, 8);
+          var pages = [];
+          var i = 1;
+          function next() {
+            if (i > max) { resolve(pages.join("\n")); return; }
+            pdf.getPage(i).then(function (page) {
+              return page.getTextContent();
+            }).then(function (tc) {
+              pages.push(tc.items.map(function (it) { return it.str; }).join(" "));
+              i++;
+              next();
+            }).catch(function () { resolve(pages.join("\n")); });
+          }
+          next();
+        }).catch(function () { resolve(""); });
+      } catch (e) { resolve(""); }
+    });
+  }
+  function parseContractFile(f, cb) {
+    var ext = String(f.name || "").toLowerCase().split(".").pop();
+    var b64 = String(f.dataUrl || "").split(",")[1] || "";
+    if (!b64) { cb(null); return; }
+    function bytes() {
+      var bin = atob(b64);
+      var arr = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      return arr;
+    }
+    function finish(text) {
+      if (!text) { cb(null); return; }
+      var jia = extractParty(text, "甲方");
+      var yi = extractParty(text, "乙方");
+      if (!jia && !yi) { cb(null); return; }
+      cb({ ourParty: jia, supplierParty: yi });
+    }
+    if (["txt", "md", "log"].indexOf(ext) >= 0) {
+      finish(decodeTextBytes(bytes()));
+    } else if (["xlsx", "xls", "csv"].indexOf(ext) >= 0) {
+      try {
+        var wb = XLSX.read(bytes(), { type: "array", codepage: 65001 });
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
+        finish(rows.map(function (r) { return r.join(" "); }).join("\n"));
+      } catch (e) { cb(null); }
+    } else if (ext === "docx") {
+      docxText(bytes()).then(finish);
+    } else if (ext === "pdf") {
+      pdfText(bytes()).then(finish);
+    } else {
+      cb(null);
+    }
   }
 
   function starWidget(val, onChange) {
@@ -1053,6 +1219,7 @@
     addInput.placeholder = "输入新的主体名称，如：某某科技有限公司";
     var addOk = el("button", "btn btn-primary btn-sm", "添加并选中");
     var addCancel = el("button", "btn btn-ghost btn-sm", "取消");
+    var ourTouched = false; // 用户手动选择过我方主体后，识别结果不再自动覆盖
     function fillOurSel(selected) {
       ourSel.innerHTML = config.ourParties.map(function (p) {
         return '<option value="' + esc(p) + '"' + (p === selected ? " selected" : "") + ">" + esc(p) + "</option>";
@@ -1063,6 +1230,7 @@
     fillOurSel(c ? c.ourParty : "");
     addBox.hidden = true;
     ourSel.addEventListener("change", function () {
+      ourTouched = true;
       if (ourSel.value === "__add__") showAddBox(); else hideAddBox();
     });
     addOk.addEventListener("click", function () {
@@ -1072,6 +1240,7 @@
         config.ourParties.push(nm);
         saveConfig();
       }
+      ourTouched = true;
       fillOurSel(nm);
       hideAddBox();
       toast("已添加主体「" + nm + "」，并保存到选项");
@@ -1092,6 +1261,37 @@
     grid.appendChild(fieldRow("银行账号", makeInput("text", "bankAccount", c ? c.bankAccount : "", "请输入银行账号")));
     grid.appendChild(fieldRow("合同开始日期", makeInput("date", "startDate", c ? c.startDate : "")));
     grid.appendChild(fieldRow("合同结束日期", makeInput("date", "endDate", c ? c.endDate : "")));
+
+    // 合同附件：上传后自动识别正文中的甲方（我方主体）/乙方（供应商签约主体）
+    var ctFiles = (c && Array.isArray(c.files)) ? c.files.slice() : [];
+    var lastFileCount = ctFiles.length;
+    function applyContractParse(res, fname) {
+      if (!res) return;
+      var changed = [];
+      var spInput = grid.querySelector('[data-key="supplierParty"]');
+      if (res.supplierParty && spInput && !spInput.value.trim()) {
+        spInput.value = res.supplierParty;
+        changed.push("供应商签约主体（乙方）「" + res.supplierParty + "」");
+      }
+      if (res.ourParty && !ourTouched && (!c || !c.ourParty)) {
+        if (config.ourParties.indexOf(res.ourParty) < 0) {
+          config.ourParties.push(res.ourParty);
+          saveConfig();
+        }
+        fillOurSel(res.ourParty);
+        hideAddBox();
+        ourTouched = true; // 识别填充一次后，不再被后续上传的文件覆盖
+        changed.push("我方签约主体（甲方）「" + res.ourParty + "」");
+      }
+      if (changed.length) toast("已从「" + (fname || "附件") + "」识别：" + changed.join("、") + "，可手动修改");
+    }
+    function onContractFilesChange(arr) {
+      var added = arr.slice(lastFileCount);
+      lastFileCount = arr.length;
+      ctFiles = arr;
+      added.forEach(function (f) { parseContractFile(f, function (res) { applyContractParse(res, f.name); }); });
+    }
+    grid.appendChild(fieldRow("合同附件", fileField(ctFiles, onContractFilesChange), false, true));
     function collect() {
       var out = {
         supplierParty: grid.querySelector('[data-key="supplierParty"]').value.trim(),
@@ -1100,7 +1300,8 @@
         bankName: grid.querySelector('[data-key="bankName"]').value.trim(),
         bankAccount: grid.querySelector('[data-key="bankAccount"]').value.trim(),
         startDate: grid.querySelector('[data-key="startDate"]').value,
-        endDate: grid.querySelector('[data-key="endDate"]').value
+        endDate: grid.querySelector('[data-key="endDate"]').value,
+        files: ctFiles
       };
       if (isNew) out.supplierId = supSel.value;
       return out;
@@ -1763,7 +1964,22 @@
   // 合同附件管理：查看/下载/删除/不限数量上传
   function openContractFiles(ct) {
     if (!Array.isArray(ct.files)) ct.files = [];
-    openFileManager("合同附件", ct.files, saveContracts, renderContracts, "供应商：" + supplierName(ct.supplierId) + " · 点击「预览」可在线查看，无需下载");
+    openFileManager("合同附件", ct.files, saveContracts, renderContracts, "供应商：" + supplierName(ct.supplierId) + " · 点击「预览」可在线查看，无需下载；上传合同文件可自动识别甲乙方", function (f) {
+      parseContractFile(f, function (res) {
+        if (!res) return;
+        var changed = [];
+        if (res.supplierParty && !ct.supplierParty) { ct.supplierParty = res.supplierParty; changed.push("供应商签约主体（乙方）「" + res.supplierParty + "」"); }
+        if (res.ourParty && !ct.ourParty) {
+          ct.ourParty = res.ourParty;
+          if (config.ourParties.indexOf(res.ourParty) < 0) { config.ourParties.push(res.ourParty); saveConfig(); }
+          changed.push("我方签约主体（甲方）「" + res.ourParty + "」");
+        }
+        if (changed.length) {
+          saveContracts(); renderContracts();
+          toast("已从「" + f.name + "」识别：" + changed.join("、") + "，可在编辑中修改");
+        }
+      });
+    });
   }
 
   // 合同流转：点击一次推进到下一流程
