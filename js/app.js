@@ -1016,11 +1016,11 @@
     var digits = String(s || "").replace(/[^0-9]/g, "");
     return (digits.length >= 6 && digits.length <= 32) ? digits : "";
   }
-  /* 定位"乙方收款信息/收款信息/付款信息…"段落：标题后 800 字符，截到盖章/签字/下一条款 */
+  /* 定位"乙方收款信息/收款信息/付款信息…"段落：标题后 1500 字符，截到盖章/签字/下一条款 */
   function findBankSegment(t) {
-    var m = t.match(/(?:乙方|甲方)?\s*收款(?:账户|账号)?信息|付款信息|收款账户信息|收款账户|收款方式|账户信息/);
+    var m = t.match(/(?:乙方|甲方)?[：:，,\s]{0,4}收款[^\n]{0,8}信息|付款信息|收款账户信息|收款账户|收款方式|账户信息/);
     if (!m) return "";
-    var seg = t.slice(m.index, m.index + 800);
+    var seg = t.slice(m.index, m.index + 1500);
     var cut = seg.search(/(?:盖章|签字|签署|签章|以下无正文|此页无正文|（此页无正文)/);
     if (cut > 0) seg = seg.slice(0, cut);
     var cut2 = seg.search(/\n\s*(?:第\s*[一二三四五六七八九十百0-9]+\s*[条章]|[一二三四五六七八九十]+\s*[、.．])/);
@@ -1059,8 +1059,8 @@
     var out = { payeeName: "", bankName: "", bankAccount: "" };
     if (!text) return out;
     var t = String(text).replace(/\r/g, "").replace(/\u3000/g, " ");
-    // 标签后换行（含"标签：\n值"、"标签\n值"）合并到同一行（docx/pdf 常见排版），仅合并单个换行
-    t = t.replace(new RegExp("(" + BANK_TAG_RE + ")[：: \\t\\u3000]*\\n[ \\t\\u3000]*", "g"), "$1：");
+    // 标签后换行（含"标签：\n值"、"标签\n值"、docx 表格"标签\n(空行)\n值"）合并到同一行
+    t = t.replace(new RegExp("(" + BANK_TAG_RE + ")[：: \\t\\u3000]*\\n(?:[ \\t\\u3000]*\\n)?[ \\t\\u3000]*", "g"), "$1：");
     // 优先在"收款信息"段落内提取（乙方收款信息：开户行/账号/账户名…），全文兜底
     var seg = findBankSegment(t);
     var r = seg ? extractBankFromText(seg, true) : { payeeName: "", bankName: "", bankAccount: "" };
@@ -1073,8 +1073,15 @@
   /* 合同文档含多份协议时（如 保密协议 + 外包制作框架合作），聚焦"外包制作框架合作"标题之后的正文 */
   function focusFrame(text) {
     var s = String(text || "");
-    var m = s.match(/外包(?:制作)?框架(?:合作)?(?:协议|合同)?|合作框架(?:协议|合同)?|制作框架(?:协议|合同)?/);
-    return m ? s.slice(m.index) : s;
+    var m, best = -1;
+    // 1) 优先独立成行的标题（行内主体为"外包制作框架(合作)协议/合同"）
+    var lineRe = /^[ \t\u3000]*《?外包(?:制作)?框架(?:合作)?(?:协议|合同)?》?[ \t\u3000]*$/mg;
+    while ((m = lineRe.exec(s))) best = m.index;
+    if (best >= 0) return s.slice(best);
+    // 2) 兜底：取"外包制作框架…"最后一次出现（框架合同一般在保密协议之后）
+    var re = /外包(?:制作)?框架(?:合作)?(?:协议|合同)?|合作框架(?:协议|合同)?|制作框架(?:协议|合同)?/g;
+    while ((m = re.exec(s))) best = m.index;
+    return best > 0 ? s.slice(best) : s;
   }
   /* xlsx/csv 表格解析：支持横向表头（表头行+数据行）与纵向（标签 值）两种布局 */
   function gridCellText(v) {
@@ -1152,13 +1159,20 @@
     }
     function finish(text, bankOverride) {
       if (!text) { cb(null); return; }
-      // 多协议文档（保密协议+外包制作框架合作）：优先在"外包制作框架合作"标题后的正文中识别
+      // 多协议文档（保密协议+外包制作框架合作）：严格只识别"外包制作框架"标题之后的正文
       var ft = focusFrame(text);
-      var jia = extractParty(ft, "甲方") || extractParty(text, "甲方");
-      var yi = extractParty(ft, "乙方") || extractParty(text, "乙方");
+      var strict = (ft !== text);
+      var jia = extractParty(ft, "甲方");
+      var yi = extractParty(ft, "乙方");
+      if (strict) {
+        // 甲乙双方两份协议通常一致：框架部分缺失时才回退全文（值相同，风险低）
+        if (!jia) jia = extractParty(text, "甲方");
+        if (!yi) yi = extractParty(text, "乙方");
+      }
+      // 日期与收款信息：有框架标题时严格只用框架部分，绝不取保密协议内容
       var dates = extractContractDates(ft);
-      if (!dates.startDate && !dates.endDate) dates = extractContractDates(text);
-      var bank = bankOverride || extractBankInfo(text);
+      if (!strict && (!dates.startDate && !dates.endDate)) dates = extractContractDates(text);
+      var bank = bankOverride || extractBankInfo(ft);
       if (!jia && !yi && !dates.startDate && !dates.endDate && !bank.payeeName && !bank.bankName && !bank.bankAccount) { cb(null); return; }
       cb({ ourParty: jia, supplierParty: yi, startDate: dates.startDate, endDate: dates.endDate, payeeName: bank.payeeName, bankName: bank.bankName, bankAccount: bank.bankAccount });
     }
@@ -1171,7 +1185,7 @@
         var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
         var text = rows.map(function (r) { return r.join(" "); }).join("\n");
         var gBank = extractBankFromGrid(rows);
-        var tBank = extractBankInfo(text);
+        var tBank = extractBankInfo(focusFrame(text));
         finish(text, {
           payeeName: gBank.payeeName || tBank.payeeName,
           bankName: gBank.bankName || tBank.bankName,
