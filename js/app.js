@@ -1017,21 +1017,32 @@
     var digits = String(s || "").replace(/[^0-9]/g, "");
     return (digits.length >= 6 && digits.length <= 32) ? digits : "";
   }
-  /* 定位收款账户信息段落：按标题强度逐个查找（乙方收款账户信息 > 收款账户信息 > 收款信息 > 其他），标题后 1500 字符，截到盖章/签字/下一条款 */
+  /* 定位收款账户信息段落：先用紧凑文本（去全部空白）匹配标题——PDF 逐字提取带空格/换行也能命中，再映射回原文取段 */
   function findBankSegment(t) {
+    var compact = t.replace(/\s+/g, "");
+    // 只认收款/付款类标题，绝不认「甲方收款账户信息」（收款人一定是乙方）
     var pats = [
       "乙方收款账户信息", "乙方收款账号信息", "乙方收款信息", "乙方账户信息",
-      "甲方收款账户信息", "甲方收款账号信息", "甲方收款信息",
       "收款账户信息", "收款账号信息", "收款账户", "收款信息",
-      "付款信息", "付款账户信息", "收款方式", "账户信息"
+      "付款方式", "付款信息", "付款账户信息", "收款方式", "账户信息"
     ];
     var pos = -1;
-    for (var i = 0; i < pats.length; i++) {
-      var idx = t.indexOf(pats[i]);
-      if (idx >= 0) { pos = idx; break; }
+    for (var i = 0; i < pats.length && pos < 0; i++) {
+      var from = 0, idx;
+      while ((idx = compact.indexOf(pats[i], from)) >= 0) {
+        // 宽泛标题若前 4 字符内含"甲方"则跳过该命中（防定位到"甲方收款/账户信息"段）
+        if (compact.slice(Math.max(0, idx - 4), idx).indexOf("甲方") >= 0) { from = idx + 1; continue; }
+        pos = idx; break;
+      }
     }
     if (pos < 0) return "";
-    var seg = t.slice(pos, pos + 1500);
+    // 紧凑索引映射回原文（第 pos 个非空白字符）
+    var orig = 0, c = 0;
+    while (orig < t.length && c < pos) {
+      if (/\s/.test(t[orig])) { orig++; continue; }
+      orig++; c++;
+    }
+    var seg = t.slice(orig, orig + 1500);
     var cut = seg.search(/(?:盖章|签字|签署|签章|以下无正文|此页无正文|（此页无正文)/);
     if (cut > 0) seg = seg.slice(0, cut);
     var cut2 = seg.search(/\n\s*(?:第\s*[一二三四五六七八九十百0-9]+\s*[条章]|[一二三四五六七八九十]+\s*[、.．])/);
@@ -1084,16 +1095,32 @@
     var t = String(text).replace(/\r/g, "").replace(/\u3000/g, " ");
     // 繁体/异体字归一化：帐(U+5E10)/帳(U+5E33)/賬(U+8CAC)→账；戸/戶→户（合同常见"帐号/帐户名"写法）
     t = t.replace(/[\u5E10\u5E33\u8CAC]/g, "账").replace(/[\u6236\u6237\u6238]/g, "户");
+    // 标签字间空白紧凑化（PDF 逐字提取「账 户 名」→「账户名」），长标签优先防子串冲突
+    var LOOSE_TAGS = ["收款人全称", "收款人名称", "收款单位名称", "收款单位", "收款方名称", "收款方", "账户名称", "账户名", "单位名称", "公司名称", "开户名称", "开户名", "开户户名", "户名", "开户银行", "开户行", "开户支行", "收款银行", "银行名称", "银行账号", "银行帐号", "收款账号", "收款账户", "收款帐号", "开户账号", "打款账号", "账户号", "银行卡号", "账号", "帐号", "卡号", "收款人"];
+    LOOSE_TAGS.sort(function (a, b) { return b.length - a.length; });
+    LOOSE_TAGS.forEach(function (tag) {
+      t = t.replace(new RegExp(tag.split("").join("\\s*"), "g"), tag);
+    });
     // 标签后换行（含"标签：\n值"、"标签\n值"、docx 表格"标签\n(空行)\n值"）合并到同一行
     t = t.replace(new RegExp("(" + BANK_TAG_RE + ")[：: \\t\\u3000]*\\n(?:[ \\t\\u3000]*\\n)?[ \\t\\u3000]*", "g"), "$1：");
-    // 找到收款账户信息段落时，严格只用该段落提取（三字段在一起），绝不全文兜底防误识别
+    // 找到收款/付款段落标题时，严格只用该段落提取（三字段在一起），绝不全文兜底防误识别
     var seg = findBankSegment(t);
     if (seg) return extractBankFromText(seg, true);
-    // 无段落标题兜底：从"乙方"首次出现之后提取（甲方信息块通常在乙方定义之前，防误取甲方户名）
-    var t2 = t;
-    var yiIdx = t2.indexOf("乙方");
-    if (yiIdx > 0) t2 = t2.slice(yiIdx);
-    return extractBankFromText(t2, false);
+    // 无段落标题兜底：找「开户行」聚集块（±300 字符内含账号），并要求块归属乙方侧（防甲方主体信息块）
+    var kbRe = /开户行|开户银行|开户支行|收款银行/g;
+    var m2;
+    while ((m2 = kbRe.exec(t))) {
+      // 归属判断：看开户行位置之前最近的主体标记是乙方还是甲方
+      var before = t.slice(0, m2.index);
+      var bYi = before.lastIndexOf("乙方"), bJia = before.lastIndexOf("甲方");
+      if (bJia > bYi) continue; // 甲方侧信息块：跳过
+      // 乙方侧（或无主体标记）：从最近的"乙方"之后取聚集块，排除甲方主体字段
+      var from = Math.max(bYi + 2, m2.index - 300), to = m2.index + 300;
+      var p = extractBankFromText(t.slice(from, to), true);
+      if (!p.bankAccount) continue; // 没有账号佐证不采信（防表头）
+      return p;
+    }
+    return out;
   }
   /* 合同文档含多份协议时（如 保密协议 + 外包制作框架合作），聚焦"外包制作框架合作"标题之后的正文 */
   function focusFrame(text) {
@@ -1103,10 +1130,22 @@
     var lineRe = /^[ \t\u3000]*《?外包(?:制作)?框架(?:合作)?(?:协议|合同)?》?[ \t\u3000]*$/mg;
     while ((m = lineRe.exec(s))) best = m.index;
     if (best >= 0) return s.slice(best);
-    // 2) 兜底：取"外包制作框架…"最后一次出现（框架合同一般在保密协议之后）
+    // 2) 行内兜底：取"外包制作框架…"最后一次出现（框架合同一般在保密协议之后）
     var re = /外包(?:制作)?框架(?:合作)?(?:协议|合同)?|合作框架(?:协议|合同)?|制作框架(?:协议|合同)?/g;
     while ((m = re.exec(s))) best = m.index;
-    return best > 0 ? s.slice(best) : s;
+    if (best > 0) return s.slice(best);
+    // 3) PDF 逐字提取带空格：紧凑文本（去空白）定位"外包制作框架"最后一次出现
+    var compact = s.replace(/\s+/g, "");
+    var ci = compact.lastIndexOf("外包制作框架");
+    if (ci < 0) ci = compact.lastIndexOf("外包框架");
+    if (ci < 0) ci = compact.lastIndexOf("制作框架");
+    if (ci < 0) return s;
+    var orig = 0, c = 0;
+    while (orig < s.length && c < ci) {
+      if (/\s/.test(s[orig])) { orig++; continue; }
+      orig++; c++;
+    }
+    return s.slice(orig);
   }
   /* xlsx/csv 表格解析：支持横向表头（表头行+数据行）与纵向（标签 值）两种布局 */
   function gridCellText(v) {
