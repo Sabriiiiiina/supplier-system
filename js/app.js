@@ -51,7 +51,7 @@
     var out = [], done = 0;
     if (!files.length) { cb([]); return; }
     files.forEach(function (f) {
-      if (f.size > 2 * 1024 * 1024) { toast("文件「" + f.name + "」超过 2MB，已跳过"); done++; if (done === files.length) cb(out); return; }
+      if (f.size > 5 * 1024 * 1024) { toast("文件「" + f.name + "」超过 5MB，已跳过"); done++; if (done === files.length) cb(out); return; }
       var r = new FileReader();
       r.onload = function () { out.push({ name: f.name, size: f.size, type: f.type, dataUrl: r.result }); done++; if (done === files.length) cb(out); };
       r.onerror = function () { done++; if (done === files.length) cb(out); };
@@ -528,7 +528,7 @@
         readFiles(inp, function (nf) { if (nf.length) { filesArr = filesArr.concat(nf); onChange(filesArr); draw(); } });
       });
       wrap.appendChild(list); wrap.appendChild(add);
-      wrap.appendChild(el("div", "file-hint", "图片/文档均可，单个不超过 2MB，保存在本浏览器"));
+      wrap.appendChild(el("div", "file-hint", "图片/文档均可，单个不超过 5MB；上传合同文件（docx/PDF）可自动识别正文信息"));
     }
     draw();
     return wrap;
@@ -1194,7 +1194,7 @@
       return arr;
     }
     function finish(text, bankOverride) {
-      if (!text) { cb(null); return; }
+      if (!text) { cb({ noText: true }); return; }
       // 多协议文档（保密协议+外包制作框架合作）：严格只识别"外包制作框架"标题之后的正文
       var ft = focusFrame(text);
       var strict = (ft !== text);
@@ -1209,7 +1209,7 @@
       var dates = extractContractDates(ft);
       if (!strict && (!dates.startDate && !dates.endDate)) dates = extractContractDates(text);
       var bank = bankOverride || extractBankInfo(ft);
-      if (!jia && !yi && !dates.startDate && !dates.endDate && !bank.payeeName && !bank.bankName && !bank.bankAccount) { cb(null); return; }
+      if (!jia && !yi && !dates.startDate && !dates.endDate && !bank.payeeName && !bank.bankName && !bank.bankAccount) { cb({ noFields: true }); return; }
       cb({ ourParty: jia, supplierParty: yi, startDate: dates.startDate, endDate: dates.endDate, payeeName: bank.payeeName, bankName: bank.bankName, bankAccount: bank.bankAccount });
     }
     if (["txt", "md", "log"].indexOf(ext) >= 0) {
@@ -1227,7 +1227,7 @@
           bankName: gBank.bankName || tBank.bankName,
           bankAccount: gBank.bankAccount || tBank.bankAccount
         });
-      } catch (e) { cb(null); }
+      } catch (e) { cb({ parseFail: true }); }
     } else if (ext === "docx") {
       docxText(bytes()).then(finish);
     } else if (ext === "pdf") {
@@ -1235,8 +1235,10 @@
         if (!text) { cb({ scanPdf: true }); return; }
         finish(text);
       });
+    } else if (["doc", "wps", "pages"].indexOf(ext) >= 0) {
+      cb({ unsupported: ext });
     } else {
-      cb(null);
+      cb({ unsupported: ext });
     }
   }
 
@@ -1510,7 +1512,15 @@
     var lastFileCount = ctFiles.length;
     function applyContractParse(res, fname) {
       if (!res) return;
+      if (!grid.isConnected) return; // 表单已关闭，识别结果不再回填
+      if (res.unsupported) {
+        toast("「" + (fname || "附件") + "」为 ." + res.unsupported + " 格式，暂不支持识别。请在 Word/WPS 中另存为 .docx 或 PDF 后重新上传");
+        return;
+      }
+      if (res.parseFail) { toast("「" + (fname || "附件") + "」文件解析失败，请确认文件未损坏后重试"); return; }
+      if (res.noText) { toast("未能从「" + (fname || "附件") + "」中提取到文字（可能是扫描件或图片型文件），请上传含文字层的 docx/PDF"); return; }
       if (res.scanPdf) { toast("「" + (fname || "附件") + "」是扫描件 PDF，没有文字层，无法自动识别，请手动填写"); return; }
+      if (res.noFields) { toast("已读取「" + (fname || "附件") + "」正文，但未识别到签约主体、收款信息或合同日期，请确认上传的是合同文件"); return; }
       var changed = [];
       var spInput = grid.querySelector('[data-key="supplierParty"]');
       if (res.supplierParty && spInput && !spInput.value.trim()) {
@@ -1560,11 +1570,21 @@
       if (changed.length) toast("已从「" + (fname || "附件") + "」识别：" + changed.join("、") + "，可手动修改");
       else if (conflicts.length) toast("识别到：" + conflicts.join("、") + "，但表单已有值未覆盖，请核对后手动修改");
     }
+    var pendingParses = 0; // 合同附件识别进行中，防止保存时识别结果未回填
     function onContractFilesChange(arr) {
       var added = arr.slice(lastFileCount);
       lastFileCount = arr.length;
       ctFiles = arr;
-      added.forEach(function (f) { parseContractFile(f, function (res) { applyContractParse(res, f.name); }); });
+      added.forEach(function (f) {
+        var isContractLike = /\.(docx?|pdf|xlsx?|xls|csv|txt|md|wps|pages)$/i.test(f.name);
+        if (!isContractLike) return;
+        toast("正在识别「" + f.name + "」…");
+        pendingParses++;
+        parseContractFile(f, function (res) {
+          pendingParses--;
+          applyContractParse(res, f.name);
+        });
+      });
     }
     grid.appendChild(fieldRow("合同附件", fileField(ctFiles, onContractFilesChange), false, true));
     function collect() {
@@ -1581,7 +1601,7 @@
       if (isNew) out.supplierId = supSel.value;
       return out;
     }
-    return { node: grid, collect: collect };
+    return { node: grid, collect: collect, pending: function () { return pendingParses; } };
   }
 
   /* ================= 模块过滤状态 ================= */
@@ -2240,9 +2260,16 @@
   function openContractFiles(ct) {
     if (!Array.isArray(ct.files)) ct.files = [];
     openFileManager("合同附件", ct.files, saveContracts, renderContracts, "供应商：" + supplierName(ct.supplierId) + " · 点击「预览」可在线查看，无需下载；上传合同文件可自动识别双方签约主体、收款信息与合同起止日期", function (f) {
+      var isContractLike = /\.(docx?|pdf|xlsx?|xls|csv|txt|md|wps|pages)$/i.test(f.name);
+      if (!isContractLike) return;
+      toast("正在识别「" + f.name + "」…");
       parseContractFile(f, function (res) {
         if (!res) return;
+        if (res.unsupported) { toast("「" + f.name + "」为 ." + res.unsupported + " 格式，暂不支持识别。请在 Word/WPS 中另存为 .docx 或 PDF 后重新上传"); return; }
+        if (res.parseFail) { toast("「" + f.name + "」文件解析失败，请确认文件未损坏后重试"); return; }
+        if (res.noText) { toast("未能从「" + f.name + "」中提取到文字（可能是扫描件或图片型文件），请上传含文字层的 docx/PDF"); return; }
         if (res.scanPdf) { toast("「" + f.name + "」是扫描件 PDF，没有文字层，无法自动识别，请手动填写"); return; }
+        if (res.noFields) { toast("已读取「" + f.name + "」正文，但未识别到签约主体、收款信息或合同日期，请确认上传的是合同文件"); return; }
         var changed = [];
         if (res.supplierParty && !ct.supplierParty) { ct.supplierParty = res.supplierParty; changed.push("供应商签约主体（乙方）「" + res.supplierParty + "」"); }
         if (res.ourParty && !ct.ourParty) {
@@ -2292,8 +2319,13 @@
     var cancel = el("button", "btn btn-ghost", "取消"); cancel.addEventListener("click", closeModal);
     var save = el("button", "btn btn-primary", "保存");
     save.addEventListener("click", function () {
+      if (form.pending() > 0) { toast("合同内容识别中，请稍等片刻再保存"); return; }
       var data = form.collect();
-      if (!data.ourParty) { toast("请选择我方签约主体"); return; }
+      if (!data.ourParty) {
+        if (data.files && data.files.length) toast("合同内容识别中或未识别到甲方，请稍等片刻，或手动选择我方签约主体");
+        else toast("请选择我方签约主体");
+        return;
+      }
       if (isNew) {
         if (!data.supplierId) { toast("请选择供应商"); return; }
         var nct = Object.assign({ id: uid(), createdAt: todayStr(), flowStatus: "未提审批", files: [] }, data);
