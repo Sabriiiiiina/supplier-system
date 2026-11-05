@@ -1000,7 +1000,8 @@
   }
   function goodPayeeName(s) {
     if (!s || s.length < 2 || s.length > 50) return "";
-    if (/(全称|名称|开户|账号|帐号|户名|卡号|地址|电话|联系人|税号|邮箱|邮编)/.test(s)) return "";
+    if (/^[、，,。;；:：\s]/.test(s)) return "";
+    if (/(全称|名称|开户|账号|帐号|户名|卡号|地址|电话|联系人|税号|邮箱|邮编|对接|反馈|项目代号|代号|方式)/.test(s)) return "";
     return s;
   }
   // 银行简称开头：工行/建行/农行/中国工商银行…（含"银行/支行/分行"等字样时直接通过）
@@ -1016,11 +1017,21 @@
     var digits = String(s || "").replace(/[^0-9]/g, "");
     return (digits.length >= 6 && digits.length <= 32) ? digits : "";
   }
-  /* 定位"乙方收款信息/收款信息/付款信息…"段落：标题后 1500 字符，截到盖章/签字/下一条款 */
+  /* 定位收款账户信息段落：按标题强度逐个查找（乙方收款账户信息 > 收款账户信息 > 收款信息 > 其他），标题后 1500 字符，截到盖章/签字/下一条款 */
   function findBankSegment(t) {
-    var m = t.match(/(?:乙方|甲方)?[：:，,\s]{0,4}收款[^\n]{0,8}信息|付款信息|收款账户信息|收款账户|收款方式|账户信息/);
-    if (!m) return "";
-    var seg = t.slice(m.index, m.index + 1500);
+    var pats = [
+      "乙方收款账户信息", "乙方收款账号信息", "乙方收款信息", "乙方账户信息",
+      "甲方收款账户信息", "甲方收款账号信息", "甲方收款信息",
+      "收款账户信息", "收款账号信息", "收款账户", "收款信息",
+      "付款信息", "付款账户信息", "收款方式", "账户信息"
+    ];
+    var pos = -1;
+    for (var i = 0; i < pats.length; i++) {
+      var idx = t.indexOf(pats[i]);
+      if (idx >= 0) { pos = idx; break; }
+    }
+    if (pos < 0) return "";
+    var seg = t.slice(pos, pos + 1500);
     var cut = seg.search(/(?:盖章|签字|签署|签章|以下无正文|此页无正文|（此页无正文)/);
     if (cut > 0) seg = seg.slice(0, cut);
     var cut2 = seg.search(/\n\s*(?:第\s*[一二三四五六七八九十百0-9]+\s*[条章]|[一二三四五六七八九十]+\s*[、.．])/);
@@ -1032,14 +1043,15 @@
     var out = { payeeName: "", bankName: "", bankAccount: "" };
     if (!t) return out;
     var m, i;
-    var payeeTags = ["收款人全称", "收款人名称", "收款单位名称", "收款单位", "收款方名称", "收款方", "账户名称", "账户名", "开户名称", "开户名", "开户户名", "户名", "单位名称", "公司名称", "收款人"];
+    // 强标签优先（账户名=收款人全称），弱标签（单位名称/公司名称/收款方）最后兜底，避免命中表头
+    var payeeTags = ["收款人全称", "收款人名称", "账户名", "账户名称", "开户名称", "开户名", "开户户名", "户名", "收款单位名称", "收款单位", "收款方名称", "收款方", "单位名称", "公司名称", "收款人"];
     for (i = 0; i < payeeTags.length && !out.payeeName; i++) {
-      m = t.match(new RegExp(payeeTags[i] + "[：:\\s]*([^\\n，,。;；]{2,60})"));
+      m = t.match(new RegExp(payeeTags[i] + "[：:\\s]*([^\\n，,。;；、]{2,60})"));
       if (m) out.payeeName = goodPayeeName(cutBankValue(m[1]));
     }
     var bankTags = ["开户银行", "开户行", "开户支行", "收款银行", "银行名称"];
     for (i = 0; i < bankTags.length && !out.bankName; i++) {
-      m = t.match(new RegExp(bankTags[i] + "[：:\\s]*([^\\n，,。;；]{2,60})"));
+      m = t.match(new RegExp(bankTags[i] + "[：:\\s]*([^\\n，,。;；、]{2,60})"));
       if (m) out.bankName = goodBankName(cutBankValue(m[1]));
     }
     var accRe = new RegExp("(" + BANK_TAG_RE + ")[：:\\s]*([0-9][0-9\\s\\-·.]{4,45})", "g");
@@ -1061,14 +1073,10 @@
     var t = String(text).replace(/\r/g, "").replace(/\u3000/g, " ");
     // 标签后换行（含"标签：\n值"、"标签\n值"、docx 表格"标签\n(空行)\n值"）合并到同一行
     t = t.replace(new RegExp("(" + BANK_TAG_RE + ")[：: \\t\\u3000]*\\n(?:[ \\t\\u3000]*\\n)?[ \\t\\u3000]*", "g"), "$1：");
-    // 优先在"收款信息"段落内提取（乙方收款信息：开户行/账号/账户名…），全文兜底
+    // 找到收款账户信息段落时，严格只用该段落提取（三字段在一起），绝不全文兜底防误识别
     var seg = findBankSegment(t);
-    var r = seg ? extractBankFromText(seg, true) : { payeeName: "", bankName: "", bankAccount: "" };
-    var full = extractBankFromText(t, false);
-    out.payeeName = r.payeeName || full.payeeName;
-    out.bankName = r.bankName || full.bankName;
-    out.bankAccount = r.bankAccount || full.bankAccount;
-    return out;
+    if (seg) return extractBankFromText(seg, true);
+    return extractBankFromText(t, false);
   }
   /* 合同文档含多份协议时（如 保密协议 + 外包制作框架合作），聚焦"外包制作框架合作"标题之后的正文 */
   function focusFrame(text) {
@@ -1089,7 +1097,7 @@
   }
   function gridTagKind(cell) {
     var s = gridCellText(cell).replace(/[：:\s]/g, "");
-    if (/(收款人全称|收款人名称|收款单位|收款方|账户名称|单位名称|公司名称|户名|开户名|开户名称)/.test(s)) return "payee";
+    if (/(收款人全称|收款人名称|收款单位|收款方|账户名|账户名称|单位名称|公司名称|户名|开户名|开户名称)/.test(s)) return "payee";
     if (/(开户行|开户银行|开户支行|收款银行|银行名称)/.test(s)) return "bank";
     if (/(银行账号|银行帐号|收款账号|收款账户|收款帐号|开户账号|打款账号|账户号|银行卡号|账号|帐号|卡号)/.test(s)) return "acc";
     return "";
@@ -1125,26 +1133,37 @@
         }
         if (out.payeeName && out.bankName && out.bankAccount) break;
       }
-      if (out.payeeName || out.bankName || out.bankAccount) return out;
+      // 横向表头结果仅在"开户行"列提取到有效银行名时采信（银行名特征强，防表头误命中）
+      if (out.bankName && (out.payeeName || out.bankAccount)) return out;
     }
-    // B) 纵向：某行 = 标签 + 相邻值
-    for (var r2 = 0; r2 < rows.length; r2++) {
-      var row2 = (rows[r2] || []).map(gridCellText);
-      for (var c2 = 0; c2 < row2.length; c2++) {
-        var k2 = gridTagKind(row2[c2]);
-        if (!k2) continue;
-        var val = "";
-        for (var c3 = c2 + 1; c3 < row2.length; c3++) {
-          if (gridTagKind(row2[c3])) break;
-          if (row2[c3]) { val = row2[c3]; break; }
+    // B) 纵向：某行 = 标签 + 相邻值（强标签优先扫一轮，弱标签兜底一轮）
+    var STRONG_PAYEE_TAG_RE = /(收款人全称|收款人名称|账户名|账户名称|开户名|开户名称|开户户名|户名)/;
+    function scanVertical(strongOnly) {
+      for (var r2 = 0; r2 < rows.length; r2++) {
+        var row2 = (rows[r2] || []).map(gridCellText);
+        for (var c2 = 0; c2 < row2.length; c2++) {
+          var k2 = gridTagKind(row2[c2]);
+          if (!k2) continue;
+          if (k2 === "payee") {
+            var isStrong = STRONG_PAYEE_TAG_RE.test(row2[c2].replace(/[：:\s]/g, ""));
+            if (strongOnly && !isStrong) continue;
+            if (!strongOnly && isStrong) continue; // 强标签轮已处理过
+          }
+          var val = "";
+          for (var c3 = c2 + 1; c3 < row2.length; c3++) {
+            if (gridTagKind(row2[c3])) break;
+            if (row2[c3]) { val = row2[c3]; break; }
+          }
+          if (!val) continue;
+          if (k2 === "payee" && !out.payeeName) { var pv2 = goodPayeeName(val); if (pv2) out.payeeName = pv2; }
+          else if (k2 === "bank" && !out.bankName) { var bv2 = goodBankName(val); if (bv2) out.bankName = bv2; }
+          else if (k2 === "acc" && !out.bankAccount) { var av2 = cleanAccountValue(val); if (av2) out.bankAccount = av2; }
         }
-        if (!val) continue;
-        if (k2 === "payee" && !out.payeeName) { var pv2 = goodPayeeName(val); if (pv2) out.payeeName = pv2; }
-        else if (k2 === "bank" && !out.bankName) { var bv2 = goodBankName(val); if (bv2) out.bankName = bv2; }
-        else if (k2 === "acc" && !out.bankAccount) { var av2 = cleanAccountValue(val); if (av2) out.bankAccount = av2; }
+        if (out.payeeName && out.bankName && out.bankAccount) return true;
       }
-      if (out.payeeName && out.bankName && out.bankAccount) break;
+      return false;
     }
+    if (!scanVertical(true)) scanVertical(false);
     return out;
   }
   function parseContractFile(f, cb) {
