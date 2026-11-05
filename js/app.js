@@ -2328,7 +2328,7 @@
     });
     html += "</tbody></table>";
 
-    var wrap = el("div", "table-wrap");
+    var wrap = el("div", "table-wrap contracts-wrap");
     wrap.innerHTML = html;
     c.appendChild(wrap);
 
