@@ -14,7 +14,10 @@ const MIME = {
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".jpg": "image/jpeg",
-  ".ico": "image/x-icon"
+  ".ico": "image/x-icon",
+  ".wasm": "application/wasm",
+  ".gz": "application/gzip",
+  ".traineddata": "application/octet-stream"
 };
 
 http

@@ -841,6 +841,8 @@
   }
   function cleanPartyCandidate(s) {
     s = String(s || "").replace(/\r/g, "");
+    // OCR 常把（）识别为【】或【)：统一归一化
+    s = s.replace(/[【\[]/g, "（").replace(/[】\]]/g, "）").replace(/\)/g, "）");
     s = s.replace(/^[：:\s\u3000]+/, "");
     // 截断到下一个"甲方：/乙方（xx）："出现处（PDF 文本行合并时会连在一起）
     s = s.split(/[甲乙]方(?:[（(][^）)\n:：]{0,10}[）)])?[：:]/)[0];
@@ -864,10 +866,10 @@
     re = new RegExp(label + "[（(][^）)\\n:：]{0,8}[）)]?[：:]\\s*([^\\n，,。;；]{2,60})");
     m = t.match(re);
     if (m) { r = cleanPartyCandidate(m[1]); if (r && r !== label) return r; }
-    // 2) 甲方：名称（名称可换行）
-    re = new RegExp(label + "[：:]\\s*([^\\n]{1,60}?)(?=[，,。;；\\n]|$)", "g");
+    // 2) 甲方：名称 / 甲方，名称（OCR 常把冒号识别为逗号；名称可换行）
+    re = new RegExp(label + "[：:，,]\\s*([^\\n]{1,60}?)(?=[，,。;；\\n]|$)", "g");
     m = t.match(re);
-    if (m) { r = cleanPartyCandidate(m[0].replace(new RegExp("^" + label + "[：:]\\s*"), "")); if (r && r !== label) return r; }
+    if (m) { r = cleanPartyCandidate(m[0].replace(new RegExp("^" + label + "[：:，,]\\s*"), "")); if (r && r !== label) return r; }
     // 3) 名称（以下简称"甲方"）
     re = new RegExp("([^\\n，,。;；]{2,60}?)[（(]\\s*以下简称\\s*[“\"']?" + label);
     m = t.match(re);
@@ -934,7 +936,7 @@
       } catch (e) { resolve(""); }
     });
   }
-  // pdf：pdfjs 提取前 8 页文本（扫描件无文字层时返回空）
+  // pdf：pdfjs 提取前 20 页文本（扫描件无文字层时返回空）
   function pdfText(u8) {
     return new Promise(function (resolve) {
       if (!window.pdfjsLib) { resolve(""); return; }
@@ -948,18 +950,92 @@
           var pages = [];
           var i = 1;
           function next() {
-            if (i > max) { resolve(pages.join("\n")); return; }
+            if (i > max) { var joined = pages.join("\n"); resolve(joined.trim() ? joined : ""); return; }
             pdf.getPage(i).then(function (page) {
               return page.getTextContent();
             }).then(function (tc) {
               pages.push(tc.items.map(function (it) { return it.str; }).join(" "));
               i++;
               next();
-            }).catch(function () { resolve(pages.join("\n")); });
+            }).catch(function () { var joined = pages.join("\n"); resolve(joined.trim() ? joined : ""); });
           }
           next();
         }).catch(function () { resolve(""); });
       } catch (e) { resolve(""); }
+    });
+  }
+  // OCR 文本预处理：汉字间空格紧凑化（OCR 逐字带空格）；【】→（）归一化（OCR 常把（）识别为【】）
+  function ocrCompact(t) {
+    var s = String(t || "");
+    // OCR 逐字输出常带字间空格：用环视一次删除（普通 /g 配对替换会因相邻配对交替漏删）
+    s = s.replace(/([\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])/g, "$1");
+    // 汉字与常见标点之间的空格（OCR 常写「开户 行 ，」「名 : 」）
+    s = s.replace(/([\u4e00-\u9fff])\s+([,，。;；、：:！？])/g, "$1$2");
+    // 括号归一化（【】→（））+ 括号紧邻的空格
+    s = s.replace(/[【\[]/g, "（").replace(/[】\]]/g, "）");
+    s = s.replace(/([\u4e00-\u9fff])\s+([（(])/g, "$1$2");
+    s = s.replace(/([）)])\s+([\u4e00-\u9fff])/g, "$1$2");
+    s = s.replace(/([（(])\s+/g, "$1").replace(/\s+([）)])/g, "$1");
+    return s;
+  }
+  // 扫描件 PDF OCR：逐页渲染为图片后识别（中文），复用同一个 worker，超时兜底
+  function ocrPdfText(u8) {
+    return new Promise(function (resolve) {
+      if (!window.pdfjsLib || !window.Tesseract) { resolve(""); return; }
+      var done = false;
+      var timer = setTimeout(function () { if (!done) { done = true; resolve(""); } }, 180000);
+      function fin(t) { if (!done) { done = true; clearTimeout(timer); resolve(t); } }
+      try {
+        if (!window.__pdfWorkerSet) {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = "js/vendor/pdf.worker.min.js";
+          window.__pdfWorkerSet = true;
+        }
+        var pdfDoc = null;
+        var getWorker = window.__ocrWorker
+          ? Promise.resolve(window.__ocrWorker)
+          : window.Tesseract.createWorker("chi_sim", 1, {
+              workerPath: "js/vendor/ocr/worker.min.js",
+              corePath: "js/vendor/ocr/tesseract-core-simd-lstm.wasm.js",
+              langPath: "js/vendor/ocr/lang",
+              logger: function () {}
+            }).then(function (w) { window.__ocrWorker = w; return w; });
+        pdfjsLib.getDocument({ data: u8 }).promise.then(function (pdf) {
+          pdfDoc = pdf;
+          return getWorker;
+        }).then(function (worker) {
+          var max = Math.min(pdfDoc.numPages, 20);
+          var pages = [];
+          var i = 1;
+          function next() {
+            if (done) return;
+            if (i > max) {
+              var joined = pages.join("\n");
+              fin(joined.trim() ? joined : "");
+              return;
+            }
+            var page = null;
+            pdfDoc.getPage(i).then(function (p) {
+              page = p;
+              var vp = p.getViewport({ scale: 2 });
+              var canvas = document.createElement("canvas");
+              canvas.width = Math.floor(vp.width);
+              canvas.height = Math.floor(vp.height);
+              var ctx = canvas.getContext("2d");
+              return p.render({ canvasContext: ctx, viewport: vp }).promise.then(function () { return canvas; });
+            }).then(function (canvas) {
+              return worker.recognize(canvas, {}, { text: true }).then(function (r) {
+                pages.push((r.data && r.data.text) || "");
+                i++;
+                next();
+              });
+            }).catch(function () {
+              i++;
+              next();
+            });
+          }
+          next();
+        }).catch(function () { fin(""); });
+      } catch (e) { fin(""); }
     });
   }
   // 合同日期：一个四位年份日期（2026年1月5日 / 2026-01-05 / 2026/1/5 / 2026.1.5）
@@ -980,7 +1056,7 @@
     });
     // 日期标签后换行合并到同一行（docx 表格「开始日期\n2026年3月1日」）
     var DTAG_RE = "(?:合作开始日期|合作结束日期|合同开始日期|合同结束日期|服务开始日期|服务结束日期|项目开始日期|项目结束日期|履行起始日|履行截止日|开始日期|开始时间|生效日期|生效时间|起始日期|启动日期|结束日期|结束时间|终止日期|到期日期|截止日期|届满日期|失效日期)";
-    t = t.replace(new RegExp("(" + DTAG_RE + ")[：: \\t]*\\n(?:[ \\t]*\\n)?[ \\t]*", "g"), "$1：");
+    t = t.replace(new RegExp("(" + DTAG_RE + ")[：:，, \\t]*\\n(?:[ \\t]*\\n)?[ \\t]*", "g"), "$1：");
     // 保密/竞业上下文排除：保密期限等不是合同周期
     function secretNear(idx) {
       var win = t.slice(Math.max(0, idx - 80), idx);
@@ -1000,7 +1076,7 @@
     while ((m = eRe.exec(t))) setOnce("endDate", m[1], m.index);
     if (out.startDate && out.endDate) return out;
     // 2) 期限标签区间：合同期限/合作期限/合作周期/有效期：2026年3月1日至2026年12月31日（或 起…止）
-    var pRe = new RegExp("(?:合同期限|合作期限|合作周期|合同周期|合同有效期|合作有效期|有效期|服务期限|合作时间|服务时间|合同期|期限|履行期)[：:为\\s]*" + D + "[^\\n]{0,24}?(?:至|到|—|–|~|－|-)\\s*" + D, "g");
+    var pRe = new RegExp("(?:合同期限|合作期限|合作周期|合同周期|合同有效期|合作有效期|有效期|服务期限|合作时间|服务时间|合同期|期限|履行期)[：:，,为\\s]*" + D + "[^\\n]{0,24}?(?:至|到|—|–|~|－|-)\\s*" + D, "g");
     while ((m = pRe.exec(t))) { setOnce("startDate", m[1], m.index); setOnce("endDate", m[2], m.index); }
     if (out.startDate && out.endDate) return out;
     // 3) 区间模式：自 X 起至 Y 止 / X 起至 Y（含无"自/从"开头）
@@ -1015,9 +1091,9 @@
   /* 合同收款信息识别（收款人全称/开户行/银行账号） */
   var BANK_TAG_RE = "(?:收款人全称|收款人名称|收款单位名称|收款单位|收款方名称|收款方|账户名称|账户名|单位名称|公司名称|开户名称|开户名|开户户名|户名|开户银行|开户行|开户支行|收款银行|银行名称|银行账号|银行帐号|收款账号|收款账户|收款帐号|开户账号|打款账号|账户号|银行卡号|账号|帐号|卡号)";
   function cutBankValue(s) {
-    var parts = String(s || "").split(new RegExp(BANK_TAG_RE + "[：:]?"));
+    var parts = String(s || "").split(new RegExp(BANK_TAG_RE + "[：:，,]?"));
     var v = parts[0] || "";
-    v = v.replace(/^[：:\s]+/, "");
+    v = v.replace(/^[：:，,\s]+/, "");
     v = v.replace(/[，,。;；、\s]+$/, "");
     return v.trim();
   }
@@ -1096,7 +1172,7 @@
     // 强标签优先（账户名=收款人全称），弱标签（单位名称/公司名称/收款方）最后兜底，避免命中表头
     var payeeTags = ["收款人全称", "收款人名称", "账户名", "账户名称", "开户名称", "开户名", "开户户名", "户名", "收款单位名称", "收款单位", "收款方名称", "收款方", "单位名称", "公司名称", "收款人"];
     for (i = 0; i < payeeTags.length && !out.payeeName; i++) {
-      var pRe = new RegExp(payeeTags[i] + "[：:\\s]*([^\\n，,。;；、]{2,60})", "g");
+      var pRe = new RegExp(payeeTags[i] + "[：:，,\\s]*([^\\n，,。;；、]{2,60})", "g");
       while ((m = pRe.exec(t))) {
         if (partyBefore(m.index) === "甲") continue; // 甲方信息块：跳过
         var pv = goodPayeeName(cutBankValue(m[1]));
@@ -1108,7 +1184,7 @@
     var bankTags = ["开户银行", "开户行", "开户支行", "收款银行", "银行名称"];
     var bankRaw = "";
     for (i = 0; i < bankTags.length && !out.bankName; i++) {
-      var bRe = new RegExp(bankTags[i] + "[：:\\s]*([^\\n，,。;；、]{2,60})", "g");
+      var bRe = new RegExp(bankTags[i] + "[：:，,\\s]*([^\\n，,。;；、]{2,60})", "g");
       while ((m = bRe.exec(t))) {
         if (partyBefore(m.index) === "甲") continue; // 甲方开户行：跳过
         var bv = cutBankValue(m[1]);
@@ -1122,7 +1198,7 @@
       out.bankName = out.payeeName;
       out.payeeName = goodPayeeName(bankRaw);
     }
-    var accRe = new RegExp("(" + BANK_TAG_RE + ")[：:\\s]*([0-9][0-9\\s\\-·.]{4,45})", "g");
+    var accRe = new RegExp("(" + BANK_TAG_RE + ")[：:，,\\s]*([0-9][0-9\\s\\-·.]{4,45})", "g");
     while ((m = accRe.exec(t))) {
       if (partyBefore(m.index) === "甲") continue; // 甲方账号：跳过
       var tag = m[1], val = cleanAccountValue(m[2]);
@@ -1307,6 +1383,12 @@
         if (!bank.bankName) bank.bankName = fullB.bankName;
         if (!bank.bankAccount) bank.bankAccount = fullB.bankAccount;
       }
+      // OCR 扫描件：乙方主体常识别不全（如「郑州数学黎」），而收款段落质量高——收款人全称即乙方账号名称，用它兜底
+      if (bank.payeeName && /(公司|工作室|团队|中心|事务所|研究院|集团|厂|店|社)/.test(bank.payeeName)) {
+        if (!yi || (yi.length <= 12 && !/(公司|工作室|团队|中心|事务所|研究院|集团|厂|店|社)/.test(yi))) {
+          yi = bank.payeeName;
+        }
+      }
       if (!jia && !yi && !dates.startDate && !dates.endDate && !bank.payeeName && !bank.bankName && !bank.bankAccount) { cb({ noFields: true }); return; }
       cb({ ourParty: jia, supplierParty: yi, startDate: dates.startDate, endDate: dates.endDate, payeeName: bank.payeeName, bankName: bank.bankName, bankAccount: bank.bankAccount });
     }
@@ -1330,8 +1412,17 @@
       docxText(bytes()).then(finish);
     } else if (ext === "pdf") {
       pdfText(bytes()).then(function (text) {
-        if (!text) { cb({ scanPdf: true }); return; }
-        finish(text);
+        if (text) { finish(text); return; }
+        // 扫描件 PDF（无文字层）：用 OCR 识别图片后走同一管线
+        if (window.Tesseract && window.pdfjsLib) {
+          toast("检测到扫描件 PDF，正在 OCR 识别文字（约需 30-60 秒），请稍候…");
+          ocrPdfText(bytes()).then(function (ocrText) {
+            if (!ocrText) { cb({ scanPdf: true }); return; }
+            finish(ocrCompact(ocrText));
+          });
+        } else {
+          cb({ scanPdf: true });
+        }
       });
     } else if (["doc", "wps", "pages"].indexOf(ext) >= 0) {
       cb({ unsupported: ext });
@@ -1617,7 +1708,7 @@
       }
       if (res.parseFail) { toast("「" + (fname || "附件") + "」文件解析失败，请确认文件未损坏后重试"); return; }
       if (res.noText) { toast("未能从「" + (fname || "附件") + "」中提取到文字（可能是扫描件或图片型文件），请上传含文字层的 docx/PDF"); return; }
-      if (res.scanPdf) { toast("「" + (fname || "附件") + "」是扫描件 PDF，没有文字层，无法自动识别，请手动填写"); return; }
+      if (res.scanPdf) { toast("「" + (fname || "附件") + "」是扫描件 PDF，自动识别（OCR）也未能提取到有效内容，请手动填写"); return; }
       if (res.noFields) { toast("已读取「" + (fname || "附件") + "」正文，但未识别到签约主体、收款信息或合同日期，请确认上传的是合同文件"); return; }
       var changed = [];
       var spInput = grid.querySelector('[data-key="supplierParty"]');
@@ -2382,7 +2473,7 @@
         if (res.unsupported) { toast("「" + f.name + "」为 ." + res.unsupported + " 格式，暂不支持识别。请在 Word/WPS 中另存为 .docx 或 PDF 后重新上传"); return; }
         if (res.parseFail) { toast("「" + f.name + "」文件解析失败，请确认文件未损坏后重试"); return; }
         if (res.noText) { toast("未能从「" + f.name + "」中提取到文字（可能是扫描件或图片型文件），请上传含文字层的 docx/PDF"); return; }
-        if (res.scanPdf) { toast("「" + f.name + "」是扫描件 PDF，没有文字层，无法自动识别，请手动填写"); return; }
+        if (res.scanPdf) { toast("「" + f.name + "」是扫描件 PDF，自动识别（OCR）也未能提取到有效内容，请手动填写"); return; }
         if (res.noFields) { toast("已读取「" + f.name + "」正文，但未识别到签约主体、收款信息或合同日期，请确认上传的是合同文件"); return; }
         var changed = [];
         if (res.supplierParty && !ct.supplierParty) { ct.supplierParty = res.supplierParty; changed.push("供应商签约主体（乙方）「" + res.supplierParty + "」"); }
@@ -3300,6 +3391,7 @@
     renderContracts: renderContracts,
     renderDispatch: renderDispatch,
     parseScheduleFile: parseScheduleFile,
+    parseContractFile: parseContractFile,
     getState: function () {
       return {
         session: !!session,
