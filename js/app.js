@@ -844,7 +844,7 @@
     s = s.replace(/^[：:\s\u3000]+/, "");
     // 截断到下一个"甲方：/乙方（xx）："出现处（PDF 文本行合并时会连在一起）
     s = s.split(/[甲乙]方(?:[（(][^）)\n:：]{0,10}[）)])?[：:]/)[0];
-    s = s.replace(/(?:地址|住所|统一社会信用代码|法定代表人|联系人|联系电话|电话|开户行|银行账号|账号|签订日期|签订地点|邮编|传真|邮箱).*$/, "");
+    s = s.replace(/(?:地址|住所|统一社会信用代码|法定代表人|联系人|联系电话|电话|开户行|银行账号|账号|签订日期|签署日期|签订地点|邮编|传真|邮箱).*$/, "");
     s = s.replace(/[（(]?以下简称[“"'‘’]?[甲乙]方[”"']?[）)]?.*$/, "");
     s = s.replace(/[（(][^（）()]*[）)]\s*$/g, function (full) {
       var inner = full.slice(1, -1);
@@ -944,7 +944,7 @@
           window.__pdfWorkerSet = true;
         }
         pdfjsLib.getDocument({ data: u8 }).promise.then(function (pdf) {
-          var max = Math.min(pdf.numPages, 8);
+          var max = Math.min(pdf.numPages, 20);
           var pages = [];
           var i = 1;
           function next() {
@@ -990,7 +990,7 @@
     return out;
   }
   /* 合同收款信息识别（收款人全称/开户行/银行账号） */
-  var BANK_TAG_RE = "(?:收款人全称|收款人名称|收款单位名称|收款单位|收款方名称|收款方|账户名称|单位名称|公司名称|开户名称|开户名|开户户名|户名|开户银行|开户行|开户支行|收款银行|银行名称|银行账号|银行帐号|收款账号|收款账户|收款帐号|开户账号|打款账号|账户号|银行卡号|账号|帐号|卡号)";
+  var BANK_TAG_RE = "(?:收款人全称|收款人名称|收款单位名称|收款单位|收款方名称|收款方|账户名称|账户名|单位名称|公司名称|开户名称|开户名|开户户名|户名|开户银行|开户行|开户支行|收款银行|银行名称|银行账号|银行帐号|收款账号|收款账户|收款帐号|开户账号|打款账号|账户号|银行卡号|账号|帐号|卡号)";
   function cutBankValue(s) {
     var parts = String(s || "").split(new RegExp(BANK_TAG_RE + "[：:]?"));
     var v = parts[0] || "";
@@ -1016,31 +1016,37 @@
     var digits = String(s || "").replace(/[^0-9]/g, "");
     return (digits.length >= 6 && digits.length <= 32) ? digits : "";
   }
-  function extractBankInfo(text) {
+  /* 定位"乙方收款信息/收款信息/付款信息…"段落：标题后 800 字符，截到盖章/签字/下一条款 */
+  function findBankSegment(t) {
+    var m = t.match(/(?:乙方|甲方)?\s*收款(?:账户|账号)?信息|付款信息|收款账户信息|收款账户|收款方式|账户信息/);
+    if (!m) return "";
+    var seg = t.slice(m.index, m.index + 800);
+    var cut = seg.search(/(?:盖章|签字|签署|签章|以下无正文|此页无正文|（此页无正文)/);
+    if (cut > 0) seg = seg.slice(0, cut);
+    var cut2 = seg.search(/\n\s*(?:第\s*[一二三四五六七八九十百0-9]+\s*[条章]|[一二三四五六七八九十]+\s*[、.．])/);
+    if (cut2 > 0) seg = seg.slice(0, cut2);
+    return seg;
+  }
+  /* 指定文本范围内提取收款三字段；inSegment=true 时"账号"等裸标签不再要求前文关键词 */
+  function extractBankFromText(t, inSegment) {
     var out = { payeeName: "", bankName: "", bankAccount: "" };
-    if (!text) return out;
-    var t = String(text).replace(/\r/g, "").replace(/\u3000/g, " ");
-    // 标签后换行（含"标签：\n值"、"标签\n值"）合并到同一行（docx/pdf 常见排版），仅合并单个换行
-    t = t.replace(new RegExp("(" + BANK_TAG_RE + ")[：: \\t\\u3000]*\\n[ \\t\\u3000]*", "g"), "$1：");
+    if (!t) return out;
     var m, i;
-    // 1) 收款人全称
-    var payeeTags = ["收款人全称", "收款人名称", "收款单位名称", "收款单位", "收款方名称", "收款方", "账户名称", "开户名称", "开户名", "开户户名", "户名", "单位名称", "公司名称", "收款人"];
+    var payeeTags = ["收款人全称", "收款人名称", "收款单位名称", "收款单位", "收款方名称", "收款方", "账户名称", "账户名", "开户名称", "开户名", "开户户名", "户名", "单位名称", "公司名称", "收款人"];
     for (i = 0; i < payeeTags.length && !out.payeeName; i++) {
       m = t.match(new RegExp(payeeTags[i] + "[：:\\s]*([^\\n，,。;；]{2,60})"));
       if (m) out.payeeName = goodPayeeName(cutBankValue(m[1]));
     }
-    // 2) 开户行
     var bankTags = ["开户银行", "开户行", "开户支行", "收款银行", "银行名称"];
     for (i = 0; i < bankTags.length && !out.bankName; i++) {
       m = t.match(new RegExp(bankTags[i] + "[：:\\s]*([^\\n，,。;；]{2,60})"));
       if (m) out.bankName = goodBankName(cutBankValue(m[1]));
     }
-    // 3) 银行账号（裸标签"账号/帐号/卡号"要求前文含银行/收款/开户/账户关键词）
     var accRe = new RegExp("(" + BANK_TAG_RE + ")[：:\\s]*([0-9][0-9\\s\\-·.]{4,45})", "g");
     while ((m = accRe.exec(t))) {
       var tag = m[1], val = cleanAccountValue(m[2]);
       if (!val) continue;
-      if (/^(账号|帐号|卡号)$/.test(tag)) {
+      if (!inSegment && /^(账号|帐号|卡号)$/.test(tag)) {
         var ctx = t.slice(Math.max(0, m.index - 12), m.index);
         if (!/(银行|收款|开户|账户|帐号)/.test(ctx)) continue;
       }
@@ -1048,6 +1054,27 @@
       break;
     }
     return out;
+  }
+  function extractBankInfo(text) {
+    var out = { payeeName: "", bankName: "", bankAccount: "" };
+    if (!text) return out;
+    var t = String(text).replace(/\r/g, "").replace(/\u3000/g, " ");
+    // 标签后换行（含"标签：\n值"、"标签\n值"）合并到同一行（docx/pdf 常见排版），仅合并单个换行
+    t = t.replace(new RegExp("(" + BANK_TAG_RE + ")[：: \\t\\u3000]*\\n[ \\t\\u3000]*", "g"), "$1：");
+    // 优先在"收款信息"段落内提取（乙方收款信息：开户行/账号/账户名…），全文兜底
+    var seg = findBankSegment(t);
+    var r = seg ? extractBankFromText(seg, true) : { payeeName: "", bankName: "", bankAccount: "" };
+    var full = extractBankFromText(t, false);
+    out.payeeName = r.payeeName || full.payeeName;
+    out.bankName = r.bankName || full.bankName;
+    out.bankAccount = r.bankAccount || full.bankAccount;
+    return out;
+  }
+  /* 合同文档含多份协议时（如 保密协议 + 外包制作框架合作），聚焦"外包制作框架合作"标题之后的正文 */
+  function focusFrame(text) {
+    var s = String(text || "");
+    var m = s.match(/外包(?:制作)?框架(?:合作)?(?:协议|合同)?|合作框架(?:协议|合同)?|制作框架(?:协议|合同)?/);
+    return m ? s.slice(m.index) : s;
   }
   /* xlsx/csv 表格解析：支持横向表头（表头行+数据行）与纵向（标签 值）两种布局 */
   function gridCellText(v) {
@@ -1125,9 +1152,12 @@
     }
     function finish(text, bankOverride) {
       if (!text) { cb(null); return; }
-      var jia = extractParty(text, "甲方");
-      var yi = extractParty(text, "乙方");
-      var dates = extractContractDates(text);
+      // 多协议文档（保密协议+外包制作框架合作）：优先在"外包制作框架合作"标题后的正文中识别
+      var ft = focusFrame(text);
+      var jia = extractParty(ft, "甲方") || extractParty(text, "甲方");
+      var yi = extractParty(ft, "乙方") || extractParty(text, "乙方");
+      var dates = extractContractDates(ft);
+      if (!dates.startDate && !dates.endDate) dates = extractContractDates(text);
       var bank = bankOverride || extractBankInfo(text);
       if (!jia && !yi && !dates.startDate && !dates.endDate && !bank.payeeName && !bank.bankName && !bank.bankAccount) { cb(null); return; }
       cb({ ourParty: jia, supplierParty: yi, startDate: dates.startDate, endDate: dates.endDate, payeeName: bank.payeeName, bankName: bank.bankName, bankAccount: bank.bankAccount });
