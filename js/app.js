@@ -1116,7 +1116,7 @@
         for (var i = u8.length - 22; i >= 0; i--) {
           if (u8[i] === 0x50 && u8[i + 1] === 0x4b && u8[i + 2] === 0x05 && u8[i + 3] === 0x06) { eocd = i; break; }
         }
-        if (eocd < 0) { resolve(""); return; }
+        if (eocd < 0) { resolve(null); return; }
         var total = dv.getUint16(eocd + 10, true);
         var cdSize = dv.getUint32(eocd + 12, true);
         var cdOffset = dv.getUint32(eocd + 16, true);
@@ -1132,7 +1132,8 @@
           var extraLen = dv.getUint16(p + 30, true);
           var commentLen = dv.getUint16(p + 32, true);
           var lho = dv.getUint32(p + 42, true);
-          var name = dec.decode(u8.subarray(p + 46, p + 46 + nameLen));
+          // zip 条目名路径分隔符归一化（部分工具生成反斜杠/前缀路径的 docx，如「word\document.xml」「./word/document.xml」）
+          var name = dec.decode(u8.subarray(p + 46, p + 46 + nameLen)).replace(/\\/g, "/").replace(/^\.\/+/, "").replace(/^\/+/, "");
           if (name === "word/document.xml") {
             var lp = lho;
             var lNameLen = dv.getUint16(lp + 26, true);
@@ -1143,10 +1144,15 @@
           }
           p += 46 + nameLen + extraLen + commentLen;
         }
-        if (!entry) { resolve(""); return; }
+        if (!entry) { resolve(null); return; }
         function parseXml(buf) {
           var xml = new TextDecoder("utf-8").decode(new Uint8Array(buf));
-          xml = xml.replace(/<w:p[ >]/g, "\n").replace(/<w:br\/>/g, "\n").replace(/<w:tab\/>/g, " ");
+          // 段落/换行/制表符（兼容自闭合 <w:p/>、<w:p />、<w:br />、<w:tab />；<w:pPr> 等属性标签不换行）
+          xml = xml.replace(/<w:p(?=[\s/>])[^>]*\/?>/g, "\n");
+          xml = xml.replace(/<w:br(?=[\s/>])[^>]*\/?>/g, "\n");
+          xml = xml.replace(/<w:tab(?=[\s/>])[^>]*\/?>/g, " ");
+          // 表格行边界换行（合同收款信息常为表格布局，缺失时三行字段连成一行）
+          xml = xml.replace(/<w:tr(?=[\s/>])[^>]*\/?>/g, "\n");
           xml = xml.replace(/<[^>]+>/g, "");
           var d = document.createElement("textarea");
           d.innerHTML = xml;
@@ -1157,10 +1163,10 @@
         } else if (entry.method === 8) {
           try {
             var dsStream = new Blob([entry.comp]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
-            new Response(dsStream).arrayBuffer().then(function (buf) { resolve(parseXml(buf)); }).catch(function () { resolve(""); });
-          } catch (e2) { resolve(""); }
-        } else { resolve(""); }
-      } catch (e) { resolve(""); }
+            new Response(dsStream).arrayBuffer().then(function (buf) { resolve(parseXml(buf)); }).catch(function () { resolve(null); });
+          } catch (e2) { resolve(null); }
+        } else { resolve(null); }
+      } catch (e) { resolve(null); }
     });
   }
   // pdf：pdfjs 提取前 20 页文本（扫描件无文字层时返回空）
@@ -1726,7 +1732,10 @@
         });
       } catch (e) { cb({ parseFail: true }); }
     } else if (ext === "docx") {
-      docxText(bytes()).then(finish);
+      docxText(bytes()).then(function (text) {
+        if (text == null) { cb({ parseFail: true }); return; } // zip/XML 解析失败（文件损坏或格式特殊）
+        finish(text);
+      });
     } else if (ext === "pdf") {
       pdfText(bytes()).then(function (text) {
         if (text) { finish(ocrCompact(text)); return; }
