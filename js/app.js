@@ -1082,6 +1082,8 @@
     });
     s = s.replace(/[，,。;；、\s]+$/, "");
     s = s.replace(/^[为是系]+/, "");
+    // 字段标签残留（如空白模板「甲方： 」被截断到「注册」）——纯标签碎片不可能是主体名
+    if (/^(注册|住所|地址|邮编|邮箱|传真|网址|电话|联系人|法定代表人|签字|盖章|日期|账号|开户|名称|负责人|以下简称)$/.test(s)) s = "";
     if (s.length > 40) s = s.slice(0, 40);
     return s.trim();
   }
@@ -1168,6 +1170,250 @@
         } else { resolve(null); }
       } catch (e) { resolve(null); }
     });
+  }
+  // doc（Word 97-2003 二进制格式）：OLE2 复合文档 → WordDocument 流 → FIB → 文本（分片表或平铺 UTF-16LE）
+  function docText(u8) {
+    return new Promise(function (resolve) {
+      try { resolve(extractDocText(u8)); } catch (e) { resolve(null); }
+    });
+  }
+  // 文本质量评估：可读字符（CJK/ASCII 可见/制表换行）占比
+  function textQuality(s) {
+    if (!s) return 0;
+    var good = 0;
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      if (c === 0x09 || c === 0x0A || c === 0x0D || (c >= 0x20 && c !== 0x7F) || c >= 0x3000) good++;
+    }
+    return good / s.length;
+  }
+  function extractDocText(u8) {
+    var dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+    if (u8.length < 512) return null;
+    if (!(u8[0] === 0xD0 && u8[1] === 0xCF && u8[2] === 0x11 && u8[3] === 0xE0 && u8[4] === 0xA1 && u8[5] === 0xB1 && u8[6] === 0x1A && u8[7] === 0xE1)) return null;
+    var FREESECT = 0xFFFFFFFF, ENDOFCHAIN = 0xFFFFFFFE;
+    var secShift = dv.getUint16(0x1E, true) || 9;
+    if (secShift < 7 || secShift > 15) secShift = 9;
+    var miniSize = 1 << (dv.getUint16(0x20, true) || 6);
+    var secSize = 1 << secShift;
+    var firstDirSec = dv.getUint32(0x30, true);
+    var totalSec = Math.floor(u8.length / secSize);
+    function u32At(buf, off) { return new DataView(buf.buffer, buf.byteOffset, buf.byteLength).getUint32(off, true); }
+    function readSec(n) { return (n >= 0 && n < totalSec) ? u8.subarray(n * secSize, (n + 1) * secSize) : null; }
+    // 1) 定位目录扇区：先试头部值及 ±1（WPS 类文件扇区号整体 +1），失败则全盘扫描 "Root Entry"
+    function dirCandidateOK(s) {
+      var sec = readSec(s);
+      if (!sec || sec.length < 0x80) return false;
+      var sd = new DataView(sec.buffer, sec.byteOffset, sec.byteLength);
+      var type = sd.getUint8(0x42);
+      if (type !== 5 && type !== 2) return false;
+      var nameLen = sd.getUint16(0x40, true);
+      if (nameLen < 4 || nameLen > 64) return false;
+      var nm = "";
+      for (var j = 0; j < (nameLen - 2) / 2; j++) nm += String.fromCharCode(sd.getUint16(j * 2, true));
+      return nm.length > 0 && /^[\u0001\u0005\u0020-\u007e\u4e00-\u9fff]*$/.test(nm);
+    }
+    var dirStart = -1;
+    var tryOrder = [];
+    [firstDirSec, firstDirSec + 1, firstDirSec - 1].forEach(function (c) { if (c >= 0 && tryOrder.indexOf(c) < 0) tryOrder.push(c); });
+    for (var t0 = 0; t0 < tryOrder.length; t0++) { if (dirCandidateOK(tryOrder[t0])) { dirStart = tryOrder[t0]; break; } }
+    if (dirStart < 0) {
+      for (var s0 = 0; s0 < totalSec; s0++) {
+        var sec = readSec(s0);
+        if (sec && sec.length >= 8 && sec[0] === 0x52 && sec[1] === 0x00 && sec[2] === 0x6F && sec[3] === 0x00 && sec[4] === 0x6F && sec[5] === 0x00 && sec[6] === 0x74 && sec[7] === 0x00) { dirStart = s0; break; }
+      }
+    }
+    if (dirStart < 0) return null;
+    // 2) 目录区连续读取（最多 4 扇区 ≈ 16 个条目）
+    var dirLen = Math.min(4 * secSize, u8.length - dirStart * secSize);
+    var dirBuf = u8.subarray(dirStart * secSize, dirStart * secSize + dirLen);
+    var dirDv = new DataView(dirBuf.buffer, dirBuf.byteOffset, dirBuf.byteLength);
+    var entries = [];
+    for (var i = 0; i + 128 <= dirBuf.length; i += 128) {
+      var type = dirDv.getUint8(i + 0x42);
+      if (type === 0) break;
+      var nameLen = dirDv.getUint16(i + 0x40, true);
+      var nm = "";
+      for (var j = 0; j < (nameLen - 2) / 2; j++) nm += String.fromCharCode(dirDv.getUint16(i + j * 2, true));
+      var st = dirDv.getUint32(i + 0x74, true);
+      // 流大小怪癖：部分生成器（WPS）把大小写在 0x78（标准为 0x7C 低半区）
+      var sz = dirDv.getUint32(i + 0x78, true);
+      if (!sz) sz = dirDv.getUint32(i + 0x7C, true);
+      entries.push({ name: nm, type: type, start: st, size: sz });
+    }
+    // 3) FAT 候选集：DIFAT 原值 / 整体 +1 / 整体 -1（WPS 类文件扇区号整体 +1）/ 自动识别 FAT 特征扇区
+    var difat = [];
+    for (i = 0; i < 109; i++) {
+      var s1 = dv.getUint32(0x4C + i * 4, true);
+      if (s1 === FREESECT) break;
+      difat.push(s1);
+    }
+    var fatCands = [];
+    fatCands.push(difat.slice());
+    fatCands.push(difat.map(function (x) { return x + 1; }));
+    fatCands.push(difat.map(function (x) { return Math.max(0, x - 1); }));
+    var autoFats = [];
+    for (s0 = 0; s0 < totalSec; s0++) {
+      var ss = readSec(s0);
+      if (!ss) continue;
+      var sane = 0;
+      for (j = 0; j < Math.min(32, Math.floor(secSize / 4)); j++) {
+        var v = u32At(ss, j * 4);
+        if (v === ENDOFCHAIN || v === FREESECT || (v >= 2 && v <= totalSec + 2)) sane++;
+      }
+      if (sane >= 26) autoFats.push(s0);
+    }
+    if (autoFats.length) fatCands.push(autoFats);
+    function buildFat(list) {
+      var fat = [];
+      for (var a = 0; a < list.length; a++) {
+        var fs2 = readSec(list[a]);
+        if (!fs2) break;
+        for (var b2 = 0; b2 < secSize / 4; b2++) fat.push(u32At(fs2, b2 * 4));
+      }
+      return fat;
+    }
+    function chainWith(fat, start) {
+      var out = [], c = start, g = 0;
+      while (c !== ENDOFCHAIN && c !== FREESECT && g++ < totalSec + 8) {
+        if (c >= fat.length) return null;
+        if (out.indexOf(c) >= 0) return null; // 成环（脏 FAT 造成的 0→0 等）→ 视为非法
+        out.push(c);
+        c = fat[c];
+      }
+      return out;
+    }
+    // 链式读取（失败返回 null，不吞掉失败信息）
+    function readChainStream(fat, shift, ent, wantLen) {
+      if (!fat || !ent) return null;
+      var len = wantLen || ent.size;
+      if (!len) return null;
+      var start = Math.max(0, ent.start + shift);
+      if (start >= totalSec) return null;
+      var secs = chainWith(fat, start);
+      if (!secs || secs.length * secSize < len) return null;
+      var buf = new Uint8Array(len);
+      var off = 0;
+      for (var a = 0; a < secs.length && off < len; a++) {
+        var ss2 = readSec(secs[a]);
+        if (!ss2) return null;
+        var take = Math.min(secSize, len - off);
+        buf.set(ss2.subarray(0, take), off);
+        off += take;
+      }
+      return off >= len ? buf : null;
+    }
+    // 连续扇区兜底读取（WPS 类文件流通常连续存放）
+    function readContigStream(shift, ent, wantLen) {
+      if (!ent) return null;
+      var len = wantLen || ent.size;
+      if (!len) return null;
+      var start = Math.max(0, ent.start + shift);
+      var startOff = start * secSize;
+      if (startOff + len <= u8.length) return u8.subarray(startOff, startOff + len);
+      if (startOff < u8.length) return u8.subarray(startOff);
+      return null;
+    }
+    function looksLikeFib(b) { return b && b.length >= 4 && new DataView(b.buffer, b.byteOffset, b.byteLength).getUint16(0, true) === 0xA5EC; }
+    // 4) 用 WordDocument 流的 wIdent(0xA5EC) 校验来选定 (FAT 候选, 扇区偏移, 读取模式)
+    var wdEnt = null;
+    for (i = 0; i < entries.length; i++) if (entries[i].name === "WordDocument" && entries[i].type === 2) wdEnt = entries[i];
+    if (!wdEnt) return null;
+    var chosen = null;
+    var shifts = [0, 1, -1];
+    var probeLen = Math.min(wdEnt.size || secSize, 4 * secSize);
+    for (var fi = 0; fi < fatCands.length && !chosen; fi++) {
+      var fat = buildFat(fatCands[fi]);
+      for (var si = 0; si < shifts.length && !chosen; si++) {
+        var probe = readChainStream(fat, shifts[si], wdEnt, probeLen);
+        if (looksLikeFib(probe)) { chosen = { mode: "chain", fat: fat, shift: shifts[si] }; break; }
+        probe = readContigStream(shifts[si], wdEnt, probeLen);
+        if (looksLikeFib(probe)) { chosen = { mode: "contig", fat: null, shift: shifts[si] }; }
+      }
+    }
+    if (!chosen) return null;
+    function readStreamEnt(ent) {
+      if (!ent) return null;
+      if (chosen.mode === "chain") return readChainStream(chosen.fat, chosen.shift, ent, ent.size);
+      return readContigStream(chosen.shift, ent, ent.size);
+    }
+    var wdBuf = readStreamEnt(wdEnt);
+    if (!wdBuf || wdBuf.length < 0x200) return null;
+    var wdDv = new DataView(wdBuf.buffer, wdBuf.byteOffset, wdBuf.byteLength);
+    var nFib = wdDv.getUint16(0x02, true);
+    var fcMin = wdDv.getUint32(0x18, true);
+    var fcMac = wdDv.getUint32(0x1C, true);
+    if (fcMac <= fcMin) return null;
+    var dec16 = new TextDecoder("utf-16le");
+    var dec1252 = null;
+    try { dec1252 = new TextDecoder("windows-1252"); } catch (e2) {}
+    var out = "";
+    if (nFib >= 0x006B && 0x1AA <= wdBuf.length) {
+      var fcClx = wdDv.getUint32(0x1A2, true);
+      var lcbClx = wdDv.getUint32(0x1A6, true);
+      if (lcbClx > 4) {
+        // CLX：Word 97+ 通常位于表流 0Table/1Table；部分生成器（WPS）仍放在 WordDocument 流内
+        var clxSrc = null;
+        if (nFib >= 0x00C1) {
+          var tblName = (wdDv.getUint16(0x0A, true) & 0x0200) ? "1Table" : "0Table";
+          var tblEnt = null;
+          for (i = 0; i < entries.length; i++) if (entries[i].name === tblName && entries[i].type === 2) tblEnt = entries[i];
+          clxSrc = tblEnt ? readStreamEnt(tblEnt) : null;
+        }
+    if (!clxSrc) clxSrc = wdBuf;
+        if (clxSrc && fcClx + lcbClx <= clxSrc.length) {
+          var clxOut = parseClx(clxSrc.subarray(fcClx, fcClx + lcbClx), wdBuf, dec16, dec1252);
+          // 质量门：CLX 解析产物须以可读字符为主，防止脏 CLX（读错流/迷你流）产生乱码被采纳
+          if (clxOut && clxOut.length > 32 && textQuality(clxOut) >= 0.75) out = clxOut;
+        }
+      }
+    }
+    if (!out.trim()) {
+      // 平铺文本：fcMin..fcMac 为 UTF-16LE
+      out = dec16.decode(wdBuf.subarray(fcMin, Math.min(fcMac, wdBuf.length)));
+    }
+    if (!out.trim()) return null;
+    // 控制字符清洗：段落标记→换行、单元格/软换行→制表、分页→换行、域代码/特殊标记剔除
+    return out
+      .replace(/\r/g, "\n")
+      .replace(/[\u0007\u000b]/g, "\t")
+      .replace(/\u000c/g, "\n")
+      .replace(/[\u0013\u0014\u0015]/g, "")
+      .replace(/[\u0000-\u0006\u0008\u000e-\u001f\u007f]/g, "");
+  }
+  function parseClx(clx, wdBuf, dec16, dec1252) {
+    var dv = new DataView(clx.buffer, clx.byteOffset, clx.byteLength);
+    var p = 0, out = [];
+    while (p + 8 <= clx.length) {
+      var clxt = dv.getUint16(p, true);
+      if (clxt === 0x0001) { // Prc：跳过分组属性块
+        p += 4 + dv.getUint16(p + 2, true);
+      } else if (clxt === 0x0002) { // Pcdt：分片表 PlcPcd
+        var lcb = dv.getUint32(p + 4, true);
+        var plcStart = p + 8;
+        if (lcb < 12 || plcStart + lcb > clx.length) break;
+        var plc = clx.subarray(plcStart, plcStart + lcb);
+        var pdv = new DataView(plc.buffer, plc.byteOffset, plc.byteLength);
+        var n = Math.floor((lcb - 4) / 12) + 1; // Plc 结构：n-1 = (lcb-4)/12
+        if (n < 2) { p = plcStart + lcb; continue; }
+        for (var i = 0; i < n - 1; i++) {
+          var c1 = pdv.getUint32(i * 4, true);
+          var c2 = pdv.getUint32((i + 1) * 4, true);
+          var pcd = pdv.getUint32(n * 4 + i * 8, true);
+          if (c2 <= c1) continue;
+          var comp = (pcd & 0x40000000) !== 0;
+          var fc = pcd & 0x3FFFFFFF;
+          var bytes = comp ? (c2 - c1) : (c2 - c1) * 2;
+          if (fc + bytes > wdBuf.length) continue;
+          var piece = wdBuf.subarray(fc, fc + bytes);
+          out.push(comp ? (dec1252 ? dec1252.decode(piece) : new TextDecoder("latin1").decode(piece)) : dec16.decode(piece));
+        }
+        p = plcStart + lcb;
+      } else {
+        break;
+      }
+    }
+    return out.join("");
   }
   // pdf：pdfjs 提取前 20 页文本（扫描件无文字层时返回空）
   function pdfText(u8) {
@@ -1750,7 +1996,12 @@
           cb({ scanPdf: true });
         }
       });
-    } else if (["doc", "wps", "pages"].indexOf(ext) >= 0) {
+    } else if (ext === "doc") {
+      docText(bytes()).then(function (text) {
+        if (text == null) { cb({ parseFail: true }); return; }
+        finish(text);
+      });
+    } else if (["wps", "pages"].indexOf(ext) >= 0) {
       cb({ unsupported: ext });
     } else {
       cb({ unsupported: ext });
