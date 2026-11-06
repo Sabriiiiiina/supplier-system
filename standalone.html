@@ -2130,7 +2130,7 @@ body[data-theme="dark"] .flow-btn.f-3 { background: rgba(22, 163, 74, .15); bord
     s = s.replace(/^[：:\s\u3000]+/, "");
     // 截断到下一个"甲方：/乙方（xx）："出现处（PDF 文本行合并时会连在一起）
     s = s.split(/[甲乙]方(?:[（(][^）)\n:：]{0,10}[）)])?[：:]/)[0];
-    s = s.replace(/(?:地址|住所|统一社会信用代码|法定代表人|联系人|联系电话|电话|开户行|银行账号|账号|签订日期|签署日期|签订地点|邮编|传真|邮箱).*$/, "");
+    s = s.replace(/(?:地址|住所|统一社会信用代码|法定代表人|联系人|联系电话|电话|开户行|银行账号|账号|签订日期|签署日期|签订地点|邮编|传真|邮箱|第\s*[一二三四五六七八九十百0-9]+\s*[条章]).*$/, "");
     s = s.replace(/[（(]?以下简称[“"'‘’]?[甲乙]方[”"']?[）)]?.*$/, "");
     s = s.replace(/[（(][^（）()]*[）)]\s*$/g, function (full) {
       var inner = full.slice(1, -1);
@@ -2238,7 +2238,16 @@ body[data-theme="dark"] .flow-btn.f-3 { background: rgba(22, 163, 74, .15); bord
             pdf.getPage(i).then(function (page) {
               return page.getTextContent();
             }).then(function (tc) {
-              pages.push(tc.items.map(function (it) { return it.str; }).join(" "));
+              // 按 y 坐标恢复换行结构（此前整页连成一行，导致字段值互相串行污染）
+              var lines = [], cur = "", lastY = null;
+              tc.items.forEach(function (it) {
+                var y = (it.transform && it.transform.length > 5) ? it.transform[5] : 0;
+                if (lastY !== null && Math.abs(y - lastY) > 2) { lines.push(cur); cur = ""; }
+                lastY = y;
+                cur += (cur ? " " : "") + it.str;
+              });
+              if (cur) lines.push(cur);
+              pages.push(lines.join("\n"));
               i++;
               next();
             }).catch(function () { var joined = pages.join("\n"); resolve(joined.trim() ? joined : ""); });
@@ -2253,6 +2262,8 @@ body[data-theme="dark"] .flow-btn.f-3 { background: rgba(22, 163, 74, .15); bord
     var s = String(t || "");
     // OCR 逐字输出常带字间空格：用环视一次删除（普通 /g 配对替换会因相邻配对交替漏删）
     s = s.replace(/([\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])/g, "$1");
+    // 数字间空格紧凑化（OCR 常把 2026 识别成「2 0 2 6」，导致日期/账号正则失效）
+    s = s.replace(/([0-9])\s+(?=[0-9])/g, "$1");
     // 汉字与常见标点之间的空格（OCR 常写「开户 行 ，」「名 : 」）
     s = s.replace(/([\u4e00-\u9fff])\s+([,，。;；、：:！？])/g, "$1$2");
     // 括号归一化（【】→（））+ 括号紧邻的空格
@@ -2373,11 +2384,13 @@ body[data-theme="dark"] .flow-btn.f-3 { background: rgba(22, 163, 74, .15); bord
     return out;
   }
   /* 合同收款信息识别（收款人全称/开户行/银行账号） */
-  var BANK_TAG_RE = "(?:收款人全称|收款人名称|收款单位名称|收款单位|收款方名称|收款方|账户名称|账户名|单位名称|公司名称|开户名称|开户名|开户户名|户名|开户银行|开户行|开户支行|收款银行|银行名称|银行账号|银行帐号|收款账号|收款账户|收款帐号|开户账号|打款账号|账户号|银行卡号|账号|帐号|卡号)";
+  var BANK_TAG_RE = "(?:收款人全称|收款人名称|收款单位名称|收款单位|收款方名称|收款方|账户名称|账户名|单位名称|公司名称|开户名称|开户名|开户户名|户名|开户银行|开户行|开户支行|收款银行|银行名称|银行账号|银行帐号|收款账号|收款账户|收款帐号|开户账号|打款账号|公司账号|公司帐号|账户号|银行卡号|账号|帐号|卡号)";
   function cutBankValue(s) {
     var parts = String(s || "").split(new RegExp(BANK_TAG_RE + "[：:，,]?"));
     var v = parts[0] || "";
     v = v.replace(/^[：:，,\s]+/, "");
+    // 截断行内粘连的后续内容（PDF 同 y 坐标多段文本合并：「开户行：XX银行 公司账号：123」取「XX银行」）
+    v = v.replace(/(?:甲方|乙方|第\s*[一二三四五六七八九十百0-9]+\s*[条章]|应提前|如需变更|特此|以下无正文|此页无正文).*$/, "");
     v = v.replace(/[，,。;；、\s]+$/, "");
     return v.trim();
   }
@@ -2437,6 +2450,11 @@ body[data-theme="dark"] .flow-btn.f-3 { background: rgba(22, 163, 74, .15); bord
       while ((idx = compact.indexOf(pats[i], from)) >= 0) {
         // 宽泛标题若前 4 字符内含"甲方"则跳过该命中（防定位到"甲方收款/账户信息"段）
         if (compact.slice(Math.max(0, idx - 4), idx).indexOf("甲方") >= 0) { from = idx + 1; continue; }
+        // 宽泛词「收款账户」须后跟冒号/「信息」等标题特征，防误命中正文「变更收款账户」
+        if (pats[i] === "收款账户") {
+          var after = compact[idx + 4] || "";
+          if (!/^[：:信账银]/.test(after)) { from = idx + 1; continue; }
+        }
         pos = idx; break;
       }
     }
@@ -2547,7 +2565,7 @@ body[data-theme="dark"] .flow-btn.f-3 { background: rgba(22, 163, 74, .15); bord
     // 繁体/异体字归一化：帐(U+5E10)/帳(U+5E33)/賬(U+8CAC)→账；戸/戶→户（合同常见"帐号/帐户名"写法）
     t = t.replace(/[\u5E10\u5E33\u8CAC]/g, "账").replace(/[\u6236\u6237\u6238]/g, "户");
     // 标签字间空白紧凑化（PDF 逐字提取「账 户 名」→「账户名」），长标签优先防子串冲突
-    var LOOSE_TAGS = ["收款人全称", "收款人名称", "收款单位名称", "收款单位", "收款方名称", "收款方", "账户名称", "账户名", "单位名称", "公司名称", "开户名称", "开户名", "开户户名", "户名", "开户银行", "开户行", "开户支行", "收款银行", "银行名称", "银行账号", "银行帐号", "收款账号", "收款账户", "收款帐号", "开户账号", "打款账号", "账户号", "银行卡号", "账号", "帐号", "卡号", "收款人"];
+    var LOOSE_TAGS = ["收款人全称", "收款人名称", "收款单位名称", "收款单位", "收款方名称", "收款方", "账户名称", "账户名", "单位名称", "公司名称", "开户名称", "开户名", "开户户名", "户名", "开户银行", "开户行", "开户支行", "收款银行", "银行名称", "银行账号", "银行帐号", "收款账号", "收款账户", "收款帐号", "开户账号", "打款账号", "公司账号", "公司帐号", "账户号", "银行卡号", "账号", "帐号", "卡号", "收款人"];
     LOOSE_TAGS.sort(function (a, b) { return b.length - a.length; });
     LOOSE_TAGS.forEach(function (tag) {
       t = t.replace(new RegExp(tag.split("").join("\\s*"), "g"), tag);
@@ -2768,7 +2786,7 @@ body[data-theme="dark"] .flow-btn.f-3 { background: rgba(22, 163, 74, .15); bord
       docxText(bytes()).then(finish);
     } else if (ext === "pdf") {
       pdfText(bytes()).then(function (text) {
-        if (text) { finish(text); return; }
+        if (text) { finish(ocrCompact(text)); return; }
         // 扫描件 PDF（无文字层）：用 OCR 识别图片后走同一管线
         if (window.Tesseract && window.pdfjsLib) {
           toast("检测到扫描件 PDF，正在 OCR 识别文字（约需 30-60 秒），请稍候…");
