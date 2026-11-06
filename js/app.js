@@ -1576,6 +1576,40 @@
     // 4) 宽松区间：X 至 Y / X—Y（同一句内两个日期相邻）
     var lRe = new RegExp(D + "\\s*(?:至|到|—|–|~|－|-)\\s*" + D, "g");
     while ((m = lRe.exec(t))) { setOnce("startDate", m[1], m.index); setOnce("endDate", m[2], m.index); }
+    if (out.startDate && out.endDate) return out;
+    // 5) 海外合同英文日期：Month D, YYYY / D Month YYYY（含 st/nd/rd/th 序数后缀）
+    var EM = "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
+    var MONTH_NUM = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+    var ED = "(?:" + EM + "\\s+\\d{1,2}(?:st|nd|rd|th)?,?\\s*,?\\s*\\d{4}|\\d{1,2}(?:st|nd|rd|th)?\\s+" + EM + ",?\\s*,?\\s*\\d{4})";
+    function normEnDate(s) {
+      var v = String(s || "");
+      var e1 = v.match(new RegExp("(" + EM + ")\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s*,?\\s*(\\d{4})", "i"));
+      if (e1) return e1[3] + "-" + MONTH_NUM[e1[1].slice(0, 3).toLowerCase()] + "-" + e1[2];
+      var e2 = v.match(new RegExp("(\\d{1,2})(?:st|nd|rd|th)?\\s+(" + EM + "),?\\s*,?\\s*(\\d{4})", "i"));
+      if (e2) return e2[3] + "-" + MONTH_NUM[e2[2].slice(0, 3).toLowerCase()] + "-" + e2[1];
+      return "";
+    }
+    // 5a) 显式英文标签：Start Date/Effective Date: X；End Date/Expiry Date: Y
+    var esRe = new RegExp("(?:Start\\s*Date|Effective\\s*Date|Commencement\\s*Date|Effective\\s*From|Commencing\\s*On|Commences\\s*On)[：:,\\s]*(" + ED + ")", "gi");
+    while ((m = esRe.exec(t))) { var esd = normContractDate(normEnDate(m[1])); if (esd && !out.startDate) out.startDate = esd; }
+    var eeRe = new RegExp("(?:End\\s*Date|Expiry\\s*Date|Expiration\\s*Date|Termination\\s*Date|Terminates\\s*On|Expires\\s*On|Ends\\s*On)[：:,\\s]*(" + ED + ")", "gi");
+    while ((m = eeRe.exec(t))) { var eed = normContractDate(normEnDate(m[1])); if (eed && !out.endDate) out.endDate = eed; }
+    if (out.startDate && out.endDate) return out;
+    // 5b) 英文区间：from X to Y / X to Y / X until Y / X and Y（两英文日期相邻，中间常见 to/until/through/till/and）
+    var erRe = new RegExp("(" + ED + ")[^\\n]{0,40}?\\b(?:to|until|through|till|and)\\b\\s+(" + ED + ")", "gi");
+    while ((m = erRe.exec(t))) {
+      var rsd = normEnDate(m[1]), red = normEnDate(m[2]);
+      if (!rsd || !red) continue;
+      if (!out.startDate) out.startDate = normContractDate(rsd);
+      if (!out.endDate) out.endDate = normContractDate(red);
+    }
+    if (out.startDate && out.endDate) return out;
+    // 5c) 单个英文日期（只给出起始或结束一端）：要求出现在 effective/commencing/term/period/valid 等合同周期上下文
+    if (!out.startDate) {
+      var ctxRe = new RegExp("(?:effective|commencing|commences|commencement|term|period|valid|duration)[^\\n]{0,60}(" + ED + ")", "gi");
+      var mCtx = ctxRe.exec(t);
+      if (mCtx) { var fsd = normContractDate(normEnDate(mCtx[1])); if (fsd) out.startDate = fsd; }
+    }
     return out;
   }
   /* 合同收款信息识别（收款人全称/开户行/银行账号） */
@@ -1586,6 +1620,14 @@
     v = v.replace(/^[：:，,\s]+/, "");
     // 截断行内粘连的后续内容（PDF 同 y 坐标多段文本合并：「开户行：XX银行 公司账号：123」取「XX银行」）
     v = v.replace(/(?:甲方|乙方|第\s*[一二三四五六七八九十百0-9]+\s*[条章]|应提前|如需变更|特此|以下无正文|此页无正文).*$/, "");
+    v = v.replace(/[，,。;；、\s]+$/, "");
+    return v.trim();
+  }
+  // 英文字段值截断：按下一个英文标签/关键词边界切分（PDF/Word 同段合并时防串值，如账号吞「Swift Code」）
+  // 注意：不能截裸 "Bank"（银行名自身常含 Bank：HSBC Bank/Deutsche Bank）；IBAN/BIC/Account 加负前瞻防子串误命中（Citibank 含 "iban"）
+  function cutEnglishValue(s) {
+    var v = String(s || "").replace(/^[：:，,\s]+/, "");
+    v = v.replace(/(?:Account(?![A-Za-z])(?:\s*(?:No\.?|Number|#))?|Bank\s*(?:Name|Details|Information|Address|Account)|Beneficiary|Swift(?:\s*Code)?|BIC(?![A-Za-z])(?:\s*Code)?|IBAN(?![A-Za-z])|Invoice|Payment|Address|Tel(?:ephone)?\s*(?:No\.?)?|E-?mail|Contact|Signature|Signed|This\s+Agreement|Party\s+[AB]|Effective\s+Date|Commencement|Term\s*:).*$/i, "");
     v = v.replace(/[，,。;；、\s]+$/, "");
     return v.trim();
   }
@@ -1731,24 +1773,25 @@
       break;
     }
     // —— 海外合同英文标签识别：Beneficiary Name / Account Number / Bank Name / Swift Code ——
-    var engPayeeRe = /(Beneficiary\s+Name|Beneficiary['’]s\s+Name|Beneficiary(?!\s*(?:Bank|Information|Details|Account|Address|Company|Name)))[：:，,\s]*([^\n，,。;；、]{2,80})/gi;
+    // 字段值须过 cutEnglishValue 截断：PDF/Word 提取可能把多个标签挤在同一行，防账号吞「Swift Code」、银行名吞「Account」被误拒
+    var engPayeeRe = /(Beneficiary\s+Name|Beneficiary['’]s\s+Name|Beneficiary(?!\s*(?:Bank|Information|Details|Account|Address|Company|Name)))[：:，,\s]*([^\n，。;；、]{2,80})/gi;
     while (!out.payeeName && (m = engPayeeRe.exec(t))) {
-      var epv = goodPayeeName(m[2].replace(/^[：:，,\s]+/, "").replace(/[，,。;；、\s]+$/, ""));
+      var epv = goodPayeeName(cutEnglishValue(m[2]));
       if (epv && !isExcluded(epv)) out.payeeName = epv;
     }
-    var engBankRe = /(Beneficiary\s+Bank|Bank\s+Name)[：:，,\s]*([^\n，,。;；、]{2,80})/gi;
+    var engBankRe = /(Beneficiary\s+Bank|Bank\s+Name)[：:，,\s]*([^\n，。;；、]{2,80})/gi;
     while (!out.bankName && (m = engBankRe.exec(t))) {
-      var ebv = goodEnglishBankName(m[2]);
+      var ebv = goodEnglishBankName(cutEnglishValue(m[2]));
       if (ebv) out.bankName = ebv;
     }
-    var engAccRe = /(Account\s+Number|Account\s+No\.?|Account\s*#|IBAN|Account)[：:，,\s]*([A-Za-z0-9][A-Za-z0-9 \t\-·.]{4,45})/gi;
+    var engAccRe = /(Account\s+Number|Account\s+No\.?|Account\s*#|IBAN(?![A-Za-z])|Account(?![A-Za-z]))[：:，,\s]*([A-Za-z0-9][A-Za-z0-9 \t\-·.]{4,45})/gi;
     while (!out.bankAccount && (m = engAccRe.exec(t))) {
-      var eav = String(m[2]).replace(/[\s\-·.]/g, "").toUpperCase();
+      var eav = cutEnglishValue(m[2]).replace(/[\s\-·.]/g, "").toUpperCase();
       if (/^[A-Z0-9]{6,34}$/.test(eav) && /[0-9]/.test(eav)) out.bankAccount = eav;
     }
-    var engSwiftRe = /(Swift\s*Code|SWIFT\s*Code|SWIFT|BIC\s*Code|BIC)[：:，,\s]*([A-Za-z0-9][A-Za-z0-9 \t\-]{4,20})/gi;
+    var engSwiftRe = /(Swift(?:\s*Code)?|SWIFT(?:\s*Code)?|BIC(?![A-Za-z])(?:\s*Code)?)[：:，,\s]*([A-Za-z0-9][A-Za-z0-9 \t\-]{4,20})/gi;
     while (!out.swiftCode && (m = engSwiftRe.exec(t))) {
-      var esv = goodSwiftCode(m[2]);
+      var esv = goodSwiftCode(cutEnglishValue(m[2]));
       if (esv) out.swiftCode = esv;
     }
     return out;
