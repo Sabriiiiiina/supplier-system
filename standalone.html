@@ -5,28 +5,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>供应商管理系统</title>
   <style>
-/* ========== 供应商管理系统 · 全功能样式 ========== */
+/* ========== 供应商管理系统 · 现代主题样式 v2 ========== */
 :root {
-  --bg: #f5f7fa;
+  --bg: #f4f6fb;
   --surface: #ffffff;
-  --border: #e5e9f0;
-  --text: #1f2d3d;
-  --text-secondary: #6b7a90;
+  --border: #e6eaf2;
+  --border-strong: #cdd6e4;
+  --text: #1a2233;
+  --text-secondary: #667085;
   --primary: #2f6bff;
   --primary-soft: #eaf1ff;
   --danger: #e5484d;
-  --success: #1e9e5a;
+  --success: #16a34a;
   --warning: #e8842f;
-  --radius: 10px;
-  --sidebar-w: 220px;
+  --radius: 14px;
+  --radius-sm: 10px;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, .05);
+  --shadow-md: 0 4px 14px rgba(16, 24, 40, .07);
+  --shadow-lg: 0 14px 40px rgba(16, 24, 40, .14);
+  --sidebar-w: 232px;
   --sidebar-w-collapsed: 64px;
-  --topbar-h: 60px;
+  --topbar-h: 64px;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 [hidden] { display: none !important; }
 
 html, body { height: 100%; }
+
+/* 现代细滚动条 */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: #c6cfdd; border-radius: 8px;
+  border: 2px solid transparent; background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background-color: #9aa8bb; }
+::-webkit-scrollbar-track { background: transparent; }
 
 body {
   font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
@@ -47,7 +61,7 @@ a { color: inherit; }
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  transition: width .2s ease;
+  transition: width .25s cubic-bezier(.4, 0, .2, 1);
   flex-shrink: 0;
 }
 .sidebar.collapsed { width: var(--sidebar-w-collapsed); }
@@ -58,156 +72,206 @@ a { color: inherit; }
 
 .sidebar-logo {
   height: var(--topbar-h);
-  display: flex; align-items: center; gap: 10px;
-  padding: 0 16px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 11px;
+  padding: 0 18px; border-bottom: 1px solid var(--border);
 }
 .logo-mark {
-  width: 32px; height: 32px; border-radius: 8px;
-  background: var(--primary); color: #fff;
+  width: 36px; height: 36px; border-radius: 11px;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,0)), var(--primary);
+  background-color: var(--primary);
+  color: #fff;
   display: flex; align-items: center; justify-content: center;
-  font-weight: 700; flex-shrink: 0;
+  font-weight: 700; font-size: 17px; flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(47, 107, 255, .3);
 }
-.logo-text { font-weight: 600; font-size: 15px; white-space: nowrap; }
+.logo-text { font-weight: 700; font-size: 17px; white-space: nowrap; letter-spacing: .2px; }
 
-.sidebar-nav { flex: 1; padding: 12px 8px; overflow-y: auto; }
+.sidebar-nav { flex: 1; padding: 14px 10px; overflow-y: auto; }
 .nav-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px; border-radius: 8px;
+  display: flex; align-items: center; gap: 11px;
+  padding: 11px 14px; border-radius: 11px;
   color: var(--text-secondary); text-decoration: none;
-  margin-bottom: 4px; transition: background .15s, color .15s; white-space: nowrap;
+  margin-bottom: 4px; transition: background .18s, color .18s, box-shadow .18s;
+  white-space: nowrap; font-size: 14.5px; font-weight: 500;
+  position: relative;
 }
 .nav-item:hover { background: var(--primary-soft); color: var(--primary); }
-.nav-item.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
-.nav-icon { width: 20px; text-align: center; font-size: 15px; flex-shrink: 0; }
+.nav-item.active {
+  background: var(--primary-soft); color: var(--primary); font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+.nav-icon { width: 22px; text-align: center; font-size: 16px; flex-shrink: 0; }
 
-.sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); }
-.version-tag { font-size: 12px; color: var(--text-secondary); }
+.sidebar-footer { padding: 14px 18px; border-top: 1px solid var(--border); }
+.version-tag { font-size: 12.5px; color: var(--text-secondary); }
 
 /* ---------- 主区域 ---------- */
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
 .topbar {
   height: var(--topbar-h);
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; gap: 14px;
-  padding: 0 20px; flex-shrink: 0;
+  display: flex; align-items: center; gap: 16px;
+  padding: 0 22px; flex-shrink: 0;
 }
 .icon-btn {
-  background: none; border: none; font-size: 17px; cursor: pointer;
-  color: var(--text-secondary); width: 34px; height: 34px; border-radius: 8px;
-  flex-shrink: 0;
+  background: none; border: none; font-size: 19px; cursor: pointer;
+  color: var(--text-secondary); width: 38px; height: 38px; border-radius: 11px;
+  flex-shrink: 0; transition: background .15s, color .15s;
 }
 .icon-btn:hover { background: var(--primary-soft); color: var(--primary); }
 
-.breadcrumb { font-weight: 600; font-size: 15px; white-space: nowrap; }
+.breadcrumb { font-weight: 700; font-size: 18px; white-space: nowrap; letter-spacing: .2px; }
 
-.global-search-wrap { position: relative; flex: 1; max-width: 380px; }
+.global-search-wrap { position: relative; flex: 1; max-width: 400px; }
 .global-search {
-  width: 100%; padding: 7px 12px;
-  border: 1px solid var(--border); border-radius: 8px;
-  background: var(--bg); color: var(--text); outline: none; font-size: 13px;
+  width: 100%; padding: 9px 14px 9px 14px;
+  border: 1px solid var(--border); border-radius: 11px;
+  background: var(--bg); color: var(--text); outline: none; font-size: 14px;
+  transition: border-color .15s, box-shadow .15s, background .15s;
 }
-.global-search:focus { border-color: var(--primary); background: var(--surface); }
+.global-search:focus {
+  border-color: var(--primary); background: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
+}
 .search-results {
-  position: absolute; top: 42px; left: 0; right: 0;
-  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(0,0,0,.12); display: none; z-index: 50;
+  position: absolute; top: 46px; left: 0; right: 0;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 13px;
+  box-shadow: var(--shadow-lg); display: none; z-index: 50;
   max-height: 340px; overflow-y: auto;
 }
 .search-results.show { display: block; }
-.search-group { padding: 8px 12px 2px; font-size: 12px; color: var(--text-secondary); }
+.search-group { padding: 10px 14px 4px; font-size: 12.5px; color: var(--text-secondary); font-weight: 600; }
 .search-item {
-  padding: 8px 12px; cursor: pointer; font-size: 13px;
+  padding: 10px 14px; cursor: pointer; font-size: 14px;
   display: flex; justify-content: space-between; gap: 8px; align-items: center;
 }
 .search-item:hover { background: var(--primary-soft); }
-.search-item .si-sub { color: var(--text-secondary); font-size: 12px; }
+.search-item .si-sub { color: var(--text-secondary); font-size: 12.5px; }
 
-.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-.user-label { font-size: 12px; color: var(--text-secondary); }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.user-label { font-size: 13px; color: var(--text-secondary); font-weight: 500; }
 .user-select {
-  padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px;
-  background: var(--surface); color: var(--text); font-size: 13px; outline: none;
-  max-width: 130px;
+  padding: 7px 10px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--text); font-size: 14px; outline: none;
+  max-width: 140px; cursor: pointer;
+  transition: border-color .15s, box-shadow .15s;
 }
-.user-select:focus { border-color: var(--primary); }
+.user-select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
+}
 
-.content { flex: 1; overflow-y: auto; padding: 24px; }
+.content { flex: 1; overflow-y: auto; padding: 26px; }
 
 /* ---------- 通用按钮 ---------- */
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 8px 14px; border-radius: 8px; font-size: 13px;
+  padding: 9px 16px; border-radius: 11px; font-size: 14px;
   cursor: pointer; border: 1px solid transparent; line-height: 1.4;
-  white-space: nowrap;
+  white-space: nowrap; font-weight: 600;
+  transition: box-shadow .18s, transform .12s, background .18s, color .18s, border-color .18s;
 }
-.btn-primary { background: var(--primary); color: #fff; font-weight: 600; }
-.btn-primary:hover { filter: brightness(1.07); }
-.btn-ghost { background: var(--surface); color: var(--text); border-color: var(--border); }
+.btn:active { transform: translateY(1px); }
+.btn-primary {
+  background-color: var(--primary);
+  background-image: linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,0));
+  color: #fff; font-weight: 600;
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--primary) 32%, transparent);
+}
+.btn-primary:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--primary) 40%, transparent);
+  transform: translateY(-1px);
+}
+.btn-ghost {
+  background: var(--surface); color: var(--text); border-color: var(--border);
+  box-shadow: var(--shadow-sm);
+}
 .btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
 .btn-danger { background: #fdeaea; color: var(--danger); }
 .btn-danger:hover { background: #fad5d5; }
 .btn-outline { background: transparent; color: var(--primary); border-color: var(--primary); }
 .btn-outline:hover { background: var(--primary-soft); }
-.btn-sm { padding: 4px 9px; font-size: 12px; border-radius: 6px; }
-.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-sm { padding: 5px 11px; font-size: 13px; border-radius: 8px; }
+.btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 
 /* ---------- 页面头 & 工具栏 ---------- */
 .page-head {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 18px; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 20px; gap: 12px; flex-wrap: wrap;
 }
-.page-title { font-size: 20px; font-weight: 700; }
-.page-sub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; font-weight: 400; }
+.page-title { font-size: 23px; font-weight: 800; letter-spacing: .2px; }
+.page-sub { font-size: 13.5px; color: var(--text-secondary); margin-top: 5px; font-weight: 400; }
 .page-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 
 .toolbar {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 .toolbar .spacer { flex: 1; }
 .search-box input {
-  padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px;
-  background: var(--surface); color: var(--text); font-size: 13px; outline: none;
+  padding: 9px 14px; border: 1px solid var(--border); border-radius: 11px;
+  background: var(--surface); color: var(--text); font-size: 14px; outline: none;
   min-width: 200px;
+  transition: border-color .15s, box-shadow .15s;
 }
-.search-box input:focus { border-color: var(--primary); }
+.search-box input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
+}
 
-.filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
-.filter-item { display: flex; flex-direction: column; gap: 3px; }
-.filter-item > span { font-size: 11px; color: var(--text-secondary); }
+.filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
+.filter-item { display: flex; flex-direction: column; gap: 4px; }
+.filter-item > span { font-size: 12.5px; color: var(--text-secondary); font-weight: 500; }
 .filter-item select, .filter-item input {
-  padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px;
-  background: var(--surface); color: var(--text); font-size: 13px; outline: none;
-  min-width: 120px;
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--text); font-size: 14px; outline: none;
+  min-width: 120px; cursor: pointer;
+  transition: border-color .15s, box-shadow .15s;
 }
-.filter-item select:focus, .filter-item input:focus { border-color: var(--primary); }
+.filter-item select:focus, .filter-item input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
+}
 
 /* ---------- 卡片 & 统计 ---------- */
-.stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; margin-bottom: 22px; }
 .stat-card {
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 16px 18px; cursor: default;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px; cursor: default;
+  box-shadow: var(--shadow-sm);
+  position: relative; overflow: hidden;
 }
-.stat-card.clickable { cursor: pointer; transition: box-shadow .15s, transform .15s; }
-.stat-card.clickable:hover { box-shadow: 0 6px 18px rgba(0,0,0,.08); transform: translateY(-2px); }
-.stat-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
-.stat-value { font-size: 26px; font-weight: 700; line-height: 1.1; }
-.stat-value .unit { font-size: 14px; font-weight: 500; color: var(--text-secondary); margin-left: 2px; }
-.stat-sub { font-size: 12px; color: var(--text-secondary); margin-top: 6px; }
+.stat-card::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--primary) 20%, transparent));
+  opacity: .85;
+}
+.stat-card.clickable { cursor: pointer; transition: box-shadow .2s, transform .2s; }
+.stat-card.clickable:hover { box-shadow: var(--shadow-md); transform: translateY(-3px); }
+.stat-label { font-size: 13.5px; color: var(--text-secondary); margin-bottom: 8px; font-weight: 500; }
+.stat-value { font-size: 28px; font-weight: 800; line-height: 1.1; letter-spacing: .2px; }
+.stat-value .unit { font-size: 14px; font-weight: 500; color: var(--text-secondary); margin-left: 3px; }
+.stat-sub { font-size: 12.5px; color: var(--text-secondary); margin-top: 8px; }
 
 .card {
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 18px; margin-bottom: 18px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-sm);
+  padding: 20px; margin-bottom: 20px;
 }
-.card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 10px; }
-.card-title { font-size: 15px; font-weight: 600; }
+.card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 10px; }
+.card-title { font-size: 16.5px; font-weight: 700; letter-spacing: .2px; }
 
 /* ---------- 徽章 ---------- */
 .badge {
   display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  padding: 3px 11px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
   line-height: 1.7; white-space: nowrap;
 }
 .badge.gray   { background: #eef1f5; color: #5b6b7d; }
@@ -218,266 +282,321 @@ a { color: inherit; }
 .badge.purple { background: #f0eaff; color: #7c5cff; }
 
 .tag {
-  display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 11px;
+  display: inline-block; padding: 2px 9px; border-radius: 7px; font-size: 12px;
   background: var(--bg); border: 1px solid var(--border); color: var(--text-secondary);
   margin: 1px 2px 1px 0;
 }
 
 /* ---------- 表格 ---------- */
-.table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: auto; }
-.data-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 640px; }
+.table-wrap {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: auto; box-shadow: var(--shadow-sm);
+}
+.data-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 640px; }
 .data-table th, .data-table td {
-  padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+  padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--border);
   vertical-align: middle;
 }
 .data-table thead th {
-  background: var(--bg); color: var(--text-secondary); font-weight: 600; font-size: 12px;
+  background: #f7f9fc; color: var(--text-secondary); font-weight: 700; font-size: 13.5px;
+  letter-spacing: .4px;
   white-space: nowrap; position: sticky; top: 0; z-index: 2;
+  border-bottom: 2px solid var(--border);
 }
 .data-table tbody tr:last-child td { border-bottom: none; }
-.data-table tbody tr:hover { background: var(--primary-soft); }
+.data-table tbody tr { transition: background .12s; }
+.data-table tbody tr:hover { background: #f5f8ff; }
 .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
-.data-table td .cell-sub { font-size: 11px; color: var(--text-secondary); }
+.data-table td .cell-sub { font-size: 12px; color: var(--text-secondary); }
 .row-actions { display: flex; gap: 6px; white-space: nowrap; }
-.link-btn { background: none; border: none; color: var(--primary); cursor: pointer; font-size: 12px; padding: 2px 4px; }
+.link-btn { background: none; border: none; color: var(--primary); cursor: pointer; font-size: 13px; padding: 3px 5px; border-radius: 6px; font-weight: 500; }
 .link-btn:hover { text-decoration: underline; }
 .link-btn.danger { color: var(--danger); }
 
 .cell-input, .cell-select {
-  padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px;
-  background: var(--surface); color: var(--text); font-size: 12px; outline: none;
+  padding: 5px 8px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--text); font-size: 13px; outline: none;
+  transition: border-color .15s, box-shadow .15s;
 }
-.cell-input { width: 70px; }
-.cell-input:focus, .cell-select:focus { border-color: var(--primary); }
+.cell-input { width: 74px; }
+.cell-input:focus, .cell-select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 14%, transparent);
+}
 
 /* ---------- 看板 ---------- */
-.kanban { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
-.kanban-col { background: var(--bg); border-radius: var(--radius); padding: 12px; min-height: 120px; }
+.kanban { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+.kanban-col { background: #eef1f7; border-radius: var(--radius); padding: 14px; min-height: 120px; }
 .kanban-head {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 10px; font-size: 13px; font-weight: 600; color: var(--text-secondary);
+  margin-bottom: 12px; font-size: 14.5px; font-weight: 700; color: var(--text-secondary);
 }
-.kanban-count { font-size: 12px; background: var(--surface); border: 1px solid var(--border); padding: 1px 8px; border-radius: 999px; }
-.kanban-cards { display: flex; flex-direction: column; gap: 8px; }
+.kanban-count {
+  font-size: 12.5px; background: var(--surface); border: 1px solid var(--border);
+  padding: 2px 10px; border-radius: 999px; font-weight: 600;
+}
+.kanban-cards { display: flex; flex-direction: column; gap: 10px; }
 .kanban-card {
-  background: var(--surface); border: 1px solid var(--border); border-radius: 9px;
-  padding: 10px 12px; cursor: pointer; transition: box-shadow .15s;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 12px 14px; cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow .18s, transform .18s;
 }
-.kanban-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.1); }
-.kanban-card .kc-title { font-weight: 600; font-size: 13px; margin-bottom: 6px; }
-.kanban-card .kc-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
-.kanban-card .kc-foot { font-size: 11px; color: var(--text-secondary); display: flex; justify-content: space-between; gap: 6px; }
-.kanban-empty { text-align: center; color: var(--text-secondary); font-size: 12px; padding: 20px 0; }
+.kanban-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.kanban-card .kc-title { font-weight: 700; font-size: 14px; margin-bottom: 7px; }
+.kanban-card .kc-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 7px; }
+.kanban-card .kc-foot { font-size: 12px; color: var(--text-secondary); display: flex; justify-content: space-between; gap: 6px; }
+.kanban-empty { text-align: center; color: var(--text-secondary); font-size: 13px; padding: 22px 0; }
 
 /* ---------- 表单 ---------- */
-.form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px 18px; }
+.form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px 20px; }
 .form-grid .full { grid-column: 1 / -1; }
-.form-field { display: flex; flex-direction: column; gap: 5px; }
-.form-field > label { font-size: 12px; color: var(--text-secondary); }
+.form-field { display: flex; flex-direction: column; gap: 6px; }
+.form-field > label { font-size: 13.5px; color: var(--text-secondary); font-weight: 500; }
 .form-field .req { color: var(--danger); margin-left: 2px; }
+.form-field .label-hint { font-weight: 400; color: var(--text-secondary); opacity: .75; font-size: 12px; margin-left: 6px; }
 .form-field input[type="text"],
 .form-field input[type="number"],
 .form-field input[type="date"],
 .form-field input[type="month"],
 .form-field select,
 .form-field textarea {
-  padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
-  background: var(--surface); color: var(--text); font-size: 13px; outline: none; width: 100%;
+  padding: 9px 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--text); font-size: 14px; outline: none; width: 100%;
   font-family: inherit;
+  transition: border-color .15s, box-shadow .15s;
 }
 .form-field textarea { resize: vertical; min-height: 64px; }
-.form-field input:focus, .form-field select:focus, .form-field textarea:focus { border-color: var(--primary); }
+.form-field input:focus, .form-field select:focus, .form-field textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
+}
 
-.checkbox-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.checkbox-grid { display: flex; flex-wrap: wrap; gap: 9px; }
 .check-item {
-  display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px;
-  border: 1px solid var(--border); border-radius: 8px; font-size: 12px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px; padding: 7px 13px;
+  border: 1px solid var(--border); border-radius: 10px; font-size: 13px; cursor: pointer;
   background: var(--surface); color: var(--text-secondary); user-select: none;
+  transition: all .15s;
 }
 .check-item input { display: none; }
-.check-item.on { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+.check-item.on {
+  border-color: var(--primary); background: var(--primary-soft); color: var(--primary); font-weight: 600;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 10%, transparent);
+}
 
-.radio-row { display: flex; gap: 14px; flex-wrap: wrap; }
-.radio-row label { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; }
+.radio-row { display: flex; gap: 16px; flex-wrap: wrap; }
+.radio-row label { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; cursor: pointer; }
 
 /* 文件 */
-.file-list { display: flex; flex-direction: column; gap: 6px; }
+.file-list { display: flex; flex-direction: column; gap: 7px; }
 .file-chip {
-  display: flex; align-items: center; gap: 8px; padding: 6px 10px;
-  border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font-size: 12px;
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--bg); font-size: 13px;
 }
 .file-chip .fname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-chip .fsize { color: var(--text-secondary); font-size: 11px; }
-.file-chip a { color: var(--primary); text-decoration: none; font-size: 12px; }
+.file-chip .fsize { color: var(--text-secondary); font-size: 12px; }
+.file-chip a { color: var(--primary); text-decoration: none; font-size: 13px; }
 .file-add {
-  display: inline-flex; align-items: center; gap: 5px; padding: 7px 12px;
-  border: 1px dashed var(--border); border-radius: 8px; cursor: pointer; font-size: 12px;
+  display: inline-flex; align-items: center; gap: 5px; padding: 9px 14px;
+  border: 1.5px dashed var(--border-strong); border-radius: 10px; cursor: pointer; font-size: 13px;
   color: var(--text-secondary); background: var(--surface);
+  transition: all .15s;
 }
-.file-add:hover { border-color: var(--primary); color: var(--primary); }
+.file-add:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
 .file-add input { display: none; }
-.file-hint { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+.file-hint { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
 
 /* 星级 */
 .stars { display: inline-flex; gap: 2px; }
-.star { cursor: pointer; font-size: 18px; color: #d6dce4; transition: color .1s; }
+.star { cursor: pointer; font-size: 19px; color: #d6dce4; transition: color .1s, transform .1s; }
+.star:hover { transform: scale(1.15); }
 .star.on { color: #f5a623; }
 
 /* ---------- 弹窗 ---------- */
 .modal-overlay {
-  position: fixed; inset: 0; background: rgba(15,20,25,.4);
-  opacity: 0; visibility: hidden; transition: opacity .2s, visibility .2s; z-index: 90;
+  position: fixed; inset: 0; background: rgba(15, 20, 25, .45);
+  backdrop-filter: blur(2px);
+  opacity: 0; visibility: hidden; transition: opacity .22s, visibility .22s; z-index: 90;
 }
 .modal-overlay.show { opacity: 1; visibility: visible; }
 .modal {
   position: fixed; top: 50%; left: 50%; transform: translate(-50%, -46%);
   width: 720px; max-width: 94vw; max-height: 88vh;
-  background: var(--surface); border-radius: 14px; border: 1px solid var(--border);
-  box-shadow: 0 20px 60px rgba(0,0,0,.25); display: flex; flex-direction: column;
-  opacity: 0; visibility: hidden; transition: opacity .2s, transform .2s, visibility .2s; z-index: 91;
+  background: var(--surface); border-radius: 18px; border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg); display: flex; flex-direction: column;
+  opacity: 0; visibility: hidden; transition: opacity .22s, transform .22s, visibility .22s; z-index: 91;
 }
 .modal.open { opacity: 1; visibility: visible; transform: translate(-50%, -50%); }
-.modal.sm { width: 440px; }
+.modal.sm { width: 460px; }
 .modal-head {
-  padding: 16px 20px; border-bottom: 1px solid var(--border);
+  padding: 18px 22px; border-bottom: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
 }
-.modal-title { font-size: 16px; font-weight: 700; }
-.modal-close { font-size: 16px; }
-.modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+.modal-title { font-size: 18px; font-weight: 800; letter-spacing: .2px; }
+.modal-close { font-size: 17px; }
+.modal-body { padding: 22px; overflow-y: auto; flex: 1; }
 .modal-foot {
-  padding: 14px 20px; border-top: 1px solid var(--border);
+  padding: 16px 22px; border-top: 1px solid var(--border);
   display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0;
 }
 
+/* ---------- 居中确认弹窗 ---------- */
+.confirm-dialog { text-align: center; padding: 6px 0; }
+.confirm-text { font-size: 15px; color: var(--text); line-height: 1.6; }
+
 /* ---------- 空状态 ---------- */
-.empty-state { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
-.empty-icon { font-size: 40px; margin-bottom: 12px; opacity: .5; }
-.empty-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
-.empty-desc { font-size: 13px; margin-bottom: 16px; }
+.empty-state { text-align: center; padding: 64px 20px; color: var(--text-secondary); }
+.empty-icon { font-size: 44px; margin-bottom: 14px; opacity: .45; }
+.empty-title { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 7px; }
+.empty-desc { font-size: 13.5px; margin-bottom: 18px; }
 
 /* ---------- 图表 ---------- */
-.chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 18px; }
 .chart-widget {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 16px; position: relative;
+  box-shadow: var(--shadow-sm);
+  padding: 18px; position: relative;
 }
-.chart-widget .widget-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-.chart-widget .widget-title { font-size: 14px; font-weight: 600; }
-.chart-widget .widget-del { background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 14px; }
+.chart-widget .widget-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.chart-widget .widget-title { font-size: 15.5px; font-weight: 700; }
+.chart-widget .widget-del { background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 15px; }
 .chart-widget .widget-del:hover { color: var(--danger); }
 
-.bar-chart { display: flex; flex-direction: column; gap: 8px; }
-.bar-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.bar-chart { display: flex; flex-direction: column; gap: 9px; }
+.bar-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .bar-label { width: 90px; text-align: right; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
-.bar-track { flex: 1; height: 20px; background: var(--bg); border-radius: 6px; overflow: hidden; }
-.bar-fill { height: 100%; background: var(--primary); border-radius: 6px; min-width: 2px; transition: width .4s ease; }
-.bar-val { width: 52px; color: var(--text); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.bar-track { flex: 1; height: 22px; background: var(--bg); border-radius: 8px; overflow: hidden; }
+.bar-fill {
+  height: 100%;
+  background-color: var(--primary);
+  background-image: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,0));
+  border-radius: 8px; min-width: 2px; transition: width .4s ease;
+}
+.bar-val { width: 56px; color: var(--text); font-variant-numeric: tabular-nums; flex-shrink: 0; font-weight: 600; }
 
-.donut-wrap { display: flex; align-items: center; gap: 18px; }
-.donut { width: 130px; height: 130px; border-radius: 50%; flex-shrink: 0; }
-.donut-legend { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.donut-wrap { display: flex; align-items: center; gap: 20px; }
+.donut { width: 132px; height: 132px; border-radius: 50%; flex-shrink: 0; }
+.donut-legend { display: flex; flex-direction: column; gap: 7px; font-size: 13px; }
 .donut-legend .dl-row { display: flex; align-items: center; gap: 7px; }
-.donut-legend .dl-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.donut-legend .dl-dot { width: 10px; height: 10px; border-radius: 4px; flex-shrink: 0; }
 .donut-legend .dl-val { margin-left: auto; color: var(--text-secondary); }
 
-.metric-big { font-size: 34px; font-weight: 700; line-height: 1.1; }
-.metric-sub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.metric-big { font-size: 36px; font-weight: 800; line-height: 1.1; letter-spacing: .2px; }
+.metric-sub { font-size: 13px; color: var(--text-secondary); margin-top: 5px; }
 
 /* ---------- 提示 ---------- */
 .hint {
-  background: var(--primary-soft); color: var(--primary); border-radius: 8px;
-  padding: 10px 14px; font-size: 12px; margin-bottom: 16px; line-height: 1.6;
+  background: var(--primary-soft); color: var(--primary); border-radius: 11px;
+  padding: 11px 15px; font-size: 13px; margin-bottom: 18px; line-height: 1.6;
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, transparent);
 }
-.hint.warn { background: #fff8ec; color: #b06a10; }
+.hint.warn { background: #fff8ec; color: #b06a10; border-color: #f3dfb6; }
 .muted { color: var(--text-secondary); }
 
 /* ---------- 设置分组 ---------- */
-.settings-section { margin-bottom: 26px; }
-.settings-section h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
-.group-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.group-table th, .group-table td { padding: 9px 10px; border: 1px solid var(--border); text-align: left; }
-.group-table th { background: var(--bg); color: var(--text-secondary); font-weight: 600; font-size: 12px; }
-.member-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.settings-section { margin-bottom: 28px; }
+.settings-section h3 { font-size: 16.5px; font-weight: 700; margin-bottom: 14px; }
+.group-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.group-table th, .group-table td { padding: 11px 12px; border: 1px solid var(--border); text-align: left; }
+.group-table th { background: #f7f9fc; color: var(--text-secondary); font-weight: 700; font-size: 13.5px; }
+.member-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .member-chip {
-  display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px;
-  border: 1px solid var(--border); border-radius: 999px; font-size: 11px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 11px;
+  border: 1px solid var(--border); border-radius: 999px; font-size: 12.5px; cursor: pointer;
   color: var(--text-secondary); background: var(--surface);
+  transition: all .15s;
 }
-.member-chip.on { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
+.member-chip.on {
+  border-color: var(--primary); background: var(--primary-soft); color: var(--primary); font-weight: 600;
+}
 .member-chip .x { color: var(--text-secondary); }
 .member-chip .x:hover { color: var(--danger); }
 
 /* ---------- 供应商自助入库页 ---------- */
 .onboard-page {
-  position: fixed; inset: 0; background: var(--bg);
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(1100px 560px at 85% -10%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(0, 180, 160, .07), transparent 60%),
+    var(--bg);
   display: flex; align-items: center; justify-content: center; padding: 24px;
   overflow-y: auto; z-index: 100;
 }
 .onboard-box {
-  width: 620px; max-width: 100%; background: var(--surface);
-  border: 1px solid var(--border); border-radius: 16px; padding: 30px;
-  box-shadow: 0 16px 50px rgba(0,0,0,.12);
+  width: 640px; max-width: 100%; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 20px; padding: 34px;
+  box-shadow: var(--shadow-lg);
 }
-.onboard-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-.onboard-brand .logo-mark { width: 40px; height: 40px; font-size: 18px; }
-.onboard-brand h1 { font-size: 20px; font-weight: 700; }
-.onboard-desc { color: var(--text-secondary); font-size: 13px; margin-bottom: 22px; }
-.onboard-done { text-align: center; padding: 30px 0; }
-.onboard-done .big { font-size: 44px; margin-bottom: 14px; }
+.onboard-brand { display: flex; align-items: center; gap: 11px; margin-bottom: 10px; }
+.onboard-brand .logo-mark { width: 42px; height: 42px; font-size: 19px; }
+.onboard-brand h1 { font-size: 22px; font-weight: 800; }
+.onboard-desc { color: var(--text-secondary); font-size: 14px; margin-bottom: 24px; }
+.onboard-done { text-align: center; padding: 32px 0; }
+.onboard-done .big { font-size: 48px; margin-bottom: 16px; }
 
 /* ---------- toast ---------- */
 .toast {
-  position: fixed; left: 50%; bottom: 32px; transform: translate(-50%, 20px);
-  background: #1f2d3d; color: #fff; padding: 10px 18px; border-radius: 8px;
-  font-size: 13px; opacity: 0; transition: all .3s ease; z-index: 200;
-  box-shadow: 0 6px 20px rgba(0,0,0,.18); max-width: 80vw;
+  position: fixed; left: 50%; bottom: 34px; transform: translate(-50%, 20px);
+  background: #1a2233; color: #fff; padding: 12px 20px; border-radius: 12px;
+  font-size: 14px; opacity: 0; transition: all .3s ease; z-index: 200;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .22); max-width: 80vw;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 /* ---------- 界面设计器 ---------- */
 .design-overlay {
-  position: fixed; inset: 0; background: rgba(15,20,25,.32);
+  position: fixed; inset: 0; background: rgba(15, 20, 25, .32);
   opacity: 0; visibility: hidden; transition: opacity .2s, visibility .2s; z-index: 120;
 }
 .design-overlay.show { opacity: 1; visibility: visible; }
 .design-panel {
-  position: fixed; top: 0; right: 0; bottom: 0; width: 340px; max-width: 92vw;
+  position: fixed; top: 0; right: 0; bottom: 0; width: 350px; max-width: 92vw;
   background: var(--surface); border-left: 1px solid var(--border);
-  box-shadow: -8px 0 24px rgba(0,0,0,.08); transform: translateX(100%);
+  box-shadow: -10px 0 28px rgba(0, 0, 0, .09); transform: translateX(100%);
   transition: transform .25s ease; z-index: 121; display: flex; flex-direction: column;
 }
 .design-panel.open { transform: translateX(0); }
 .design-panel-head {
-  height: 56px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between;
+  height: 60px; padding: 0 18px; display: flex; align-items: center; justify-content: space-between;
   border-bottom: 1px solid var(--border); flex-shrink: 0;
 }
-.design-panel-title { font-weight: 600; font-size: 15px; }
-.design-panel-body { flex: 1; overflow-y: auto; padding: 16px; }
-.design-section { margin-bottom: 22px; }
-.design-section-title { font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; letter-spacing: .5px; }
-.design-field { display: block; margin-bottom: 10px; }
-.design-field > span { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 5px; }
+.design-panel-title { font-weight: 700; font-size: 16.5px; }
+.design-panel-body { flex: 1; overflow-y: auto; padding: 18px; }
+.design-section { margin-bottom: 24px; }
+.design-section-title { font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; letter-spacing: .5px; font-weight: 600; }
+.design-field { display: block; margin-bottom: 11px; }
+.design-field > span { display: block; font-size: 13.5px; color: var(--text-secondary); margin-bottom: 6px; }
 .design-field input[type="text"], .design-field input[type="color"] {
-  width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
-  background: var(--bg); color: var(--text); font-size: 13px; outline: none;
+  width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg); color: var(--text); font-size: 14px; outline: none;
+  transition: border-color .15s, box-shadow .15s;
 }
-.design-field input[type="color"] { height: 40px; padding: 4px; cursor: pointer; }
-.design-field input:focus { border-color: var(--primary); }
-.color-swatches { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.design-field input[type="color"] { height: 42px; padding: 5px; cursor: pointer; }
+.design-field input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
+}
+.color-swatches { display: flex; flex-wrap: wrap; gap: 11px; margin-bottom: 13px; }
 .color-swatch {
-  width: 34px; height: 34px; border-radius: 50%; border: 2px solid transparent;
-  cursor: pointer; box-shadow: inset 0 0 0 2px rgba(255,255,255,.6);
+  width: 36px; height: 36px; border-radius: 50%; border: 2px solid transparent;
+  cursor: pointer; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .6);
+  transition: transform .12s;
 }
+.color-swatch:hover { transform: scale(1.1); }
 .color-swatch.active { border-color: var(--text); }
 .theme-toggle { display: flex; gap: 10px; }
 .theme-option {
-  flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
-  background: var(--bg); color: var(--text); cursor: pointer; font-size: 13px;
+  flex: 1; padding: 11px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); cursor: pointer; font-size: 13.5px;
+  transition: all .15s;
 }
-.theme-option.active { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+.theme-option.active {
+  border-color: var(--primary); background: var(--primary-soft); color: var(--primary); font-weight: 600;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 10%, transparent);
+}
 .design-panel-foot {
-  padding: 14px 16px; border-top: 1px solid var(--border); display: flex; gap: 10px; flex-shrink: 0;
+  padding: 16px 18px; border-top: 1px solid var(--border); display: flex; gap: 10px; flex-shrink: 0;
 }
 
 /* ---------- 响应式 ---------- */
@@ -490,27 +609,343 @@ a { color: inherit; }
 
 /* ---------- 深色主题 ---------- */
 body[data-theme="dark"] {
-  --bg: #0f1419;
-  --surface: #1a212b;
-  --border: #2a3442;
-  --text: #e6ebf2;
-  --text-secondary: #8b98a8;
+  --bg: #0e141c;
+  --surface: #161e29;
+  --border: #26313f;
+  --border-strong: #3a4a5e;
+  --text: #e8edf5;
+  --text-secondary: #93a1b5;
 }
-body[data-theme="dark"] .data-table thead th { background: #151c25; }
-body[data-theme="dark"] .file-chip { background: #151c25; }
-body[data-theme="dark"] .kanban-col { background: #151c25; }
-body[data-theme="dark"] .badge.gray   { background: #2a3442; color: #9aa8b8; }
+body[data-theme="dark"] .data-table thead th { background: #1b2432; border-bottom-color: #2e3b4d; }
+body[data-theme="dark"] .group-table th { background: #1b2432; }
+body[data-theme="dark"] .data-table tbody tr:hover { background: #1c2736; }
+body[data-theme="dark"] .file-chip { background: #1b2432; }
+body[data-theme="dark"] .file-row { background: #1b2432; }
+body[data-theme="dark"] .kanban-col { background: #131b26; }
+body[data-theme="dark"] .badge.gray   { background: #26313f; color: #9aa8b8; }
 body[data-theme="dark"] .badge.blue   { background: #1d2a44; color: #7aa4ff; }
 body[data-theme="dark"] .badge.green  { background: #123224; color: #4dd08a; }
 body[data-theme="dark"] .badge.red    { background: #3a1d1d; color: #ff7a7a; }
 body[data-theme="dark"] .badge.orange { background: #3a2a16; color: #ffb46a; }
 body[data-theme="dark"] .badge.purple { background: #2a2144; color: #b39bff; }
-body[data-theme="dark"] .hint.warn { background: #2a2214; color: #f0c078; }
+body[data-theme="dark"] .hint.warn { background: #2a2214; color: #f0c078; border-color: #46391f; }
 body[data-theme="dark"] .star { color: #3a4454; }
+body[data-theme="dark"] .card,
+body[data-theme="dark"] .stat-card,
+body[data-theme="dark"] .chart-widget,
+body[data-theme="dark"] .table-wrap,
+body[data-theme="dark"] .kanban-card { box-shadow: none; }
+body[data-theme="dark"] .toast { background: #e8edf5; color: #161e29; }
+body[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #33435a; }
+
+/* ---------- 登录页 ---------- */
+.login-page {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  background:
+    radial-gradient(1200px 600px at 80% -10%, color-mix(in srgb, var(--primary) 11%, transparent), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(0, 180, 160, .08), transparent 60%),
+    var(--bg);
+  padding: 20px;
+}
+.login-card {
+  width: 100%; max-width: 400px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 36px 30px;
+  box-shadow: var(--shadow-lg);
+}
+.login-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.login-brand .logo-mark { width: 44px; height: 44px; border-radius: 13px; font-size: 21px; }
+.login-brand h1 { font-size: 22px; font-weight: 800; color: var(--text); }
+.login-desc { font-size: 14px; color: var(--text-secondary); margin-bottom: 26px; }
+.login-field { display: block; margin-bottom: 16px; }
+.login-field > span { display: block; font-size: 14px; color: var(--text-secondary); margin-bottom: 7px; font-weight: 500; }
+.login-field input {
+  width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg); color: var(--text); font-size: 15px; outline: none;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.login-field input:focus {
+  border-color: var(--primary); background: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
+}
+.otp-row { display: flex; gap: 10px; }
+.otp-row input { flex: 1; }
+.otp-row .btn { flex-shrink: 0; padding: 0 15px; }
+.login-submit { width: 100%; padding: 13px; font-size: 16px; margin-top: 6px; }
+.login-divider {
+  display: flex; align-items: center; gap: 12px;
+  color: var(--text-secondary); font-size: 12.5px; margin: 20px 0;
+}
+.login-divider::before, .login-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.btn-wechat {
+  width: 100%; padding: 13px; font-size: 15px; font-weight: 600; cursor: pointer;
+  border: 1px solid transparent; border-radius: 12px;
+  background: #07c160; color: #fff;
+  transition: background .15s, transform .12s;
+}
+.btn-wechat:hover { background: #06ad56; }
+.btn-wechat:active { transform: translateY(1px); }
+.login-error { min-height: 22px; margin-top: 13px; font-size: 13.5px; color: #e5484d; text-align: center; }
+.login-foot { margin-top: 20px; font-size: 12px; color: var(--text-secondary); text-align: center; }
+
+/* ---------- 顶栏用户信息 ---------- */
+.user-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 15px; border-radius: 999px;
+  background: var(--primary-soft); color: var(--primary);
+  font-size: 14px; font-weight: 700; white-space: nowrap;
+}
+.user-chip:not(.online) { background: var(--bg); color: var(--text-secondary); font-weight: 500; border: 1px solid var(--border); }
+
+/* ---------- 待审核入库申请 ---------- */
+.pending-box {
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, transparent);
+  background: var(--primary-soft);
+  border-radius: 14px; padding: 14px 16px; margin-bottom: 16px;
+}
+.pending-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+.pending-title { font-weight: 700; font-size: 15px; color: var(--primary); }
+.pending-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 12px 16px; margin-top: 9px;
+  box-shadow: var(--shadow-sm);
+}
+.pending-info { display: flex; flex-direction: column; gap: 3px; font-size: 14px; }
+.pending-acts { display: flex; gap: 8px; flex-shrink: 0; }
+.btn-sm { padding: 6px 13px; font-size: 13px; }
+body[data-theme="dark"] .pending-box { background: rgba(47, 107, 255, .10); }
+body[data-theme="dark"] .pending-row { background: #1b2432; }
+
+/* ---------- 合同表：表头统一首行，供应商成组竖排 ---------- */
+.contracts-table th, .contracts-table td { white-space: nowrap; }
+/* 合同表冻结：wrap 内双轴滚动，表头纵冻结（通用 th 已有 sticky top），供应商列横冻结 */
+.table-wrap.contracts-wrap { max-height: calc(100vh - 250px); min-height: 220px; }
+.contracts-table thead th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 4; /* 高于其他表头(2)与供应商列 td(1) */
+  box-shadow: 2px 0 6px rgba(0, 0, 0, .08);
+}
+.contracts-table td.ct-sup-cell {
+  text-align: left;
+  vertical-align: middle;
+  background: var(--primary-soft);
+  border-right: 1px solid var(--border);
+  min-width: 132px;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  box-shadow: 2px 0 6px rgba(0, 0, 0, .07);
+}
+.ct-sup-name { font-weight: 700; color: var(--text); font-size: 14px; white-space: nowrap; }
+.ct-sup-count { font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
+/* 不同供应商之间加粗分隔线 */
+.contracts-table tbody tr.ct-group-start td { border-top: 2px solid var(--border-strong); }
+.contracts-table tbody tr:first-child.ct-group-start td { border-top: none; }
+/* 深色主题下供应商冻结列用实色背景（半透明会透出滚动内容） */
+body[data-theme="dark"] .contracts-table td.ct-sup-cell { background: #1e2a3c; }
+body[data-theme="dark"] .contracts-table thead th:first-child { background: #1b2432; }
+
+/* 收款信息单元格：值 + 一键复制（按钮统一右对齐，列宽按本列最长内容统一） */
+.copy-cell { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; }
+.copy-cell > span {
+  color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 300px;
+}
+.copy-btn {
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 50px;
+  padding: 4px 11px;
+  font-size: 12.5px; line-height: 1.5; font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--primary);
+  cursor: pointer;
+  transition: background .15s, border-color .15s, box-shadow .15s;
+}
+.copy-btn:hover {
+  background: var(--primary-soft); border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+.copy-btn:active { transform: translateY(1px); }
+/* 收款四列：按最长内容统一列宽，保证各行复制按钮对齐 */
+.contracts-table td.cc-payee, .contracts-table td.cc-bank { min-width: 185px; }
+.contracts-table td.cc-account { min-width: 235px; }
+.contracts-table td.cc-swift { min-width: 150px; }
+/* 主体/名称类长文本：超长省略，悬停可见全文 */
+.cell-nowrap {
+  display: inline-block;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* ---------- 合同表单：我方主体单选 ---------- */
+.select-with-add select { width: 100%; }
+
+/* ---------- 我方主体自定义添加 ---------- */
+.custom-party-box {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 9px;
+}
+.custom-party-box input {
+  flex: 1; min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg); color: var(--text);
+  font-size: 14px; outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.custom-party-box input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
+}
+
+/* ---------- 合同流转状态流程按钮 ---------- */
+.flow-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 15px; border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg); color: var(--text-secondary);
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  white-space: nowrap;
+  transition: all .15s;
+}
+.flow-btn:hover:not(:disabled) {
+  border-color: var(--primary); color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+.flow-btn.f-1 { background: #eef3ff; border-color: #bcd0ff; color: #2f6bff; }
+.flow-btn.f-2 { background: #fff4e6; border-color: #ffd29e; color: #d97706; }
+.flow-btn.f-3 { background: #e9f9ef; border-color: #b5e6c6; color: #16a34a; }
+.flow-btn:disabled { cursor: default; opacity: 1; }
+body[data-theme="dark"] .flow-btn { background: var(--bg); border-color: var(--border); color: var(--text-secondary); }
+body[data-theme="dark"] .flow-btn.f-1 { background: rgba(47, 107, 255, .15); border-color: rgba(47, 107, 255, .5); color: #7ea6ff; }
+body[data-theme="dark"] .flow-btn.f-2 { background: rgba(255, 150, 50, .12); border-color: rgba(255, 170, 80, .45); color: #ffb35c; }
+body[data-theme="dark"] .flow-btn.f-3 { background: rgba(22, 163, 74, .15); border-color: rgba(34, 197, 94, .45); color: #4ade80; }
+
+/* ---------- 合同附件（药丸样式，覆盖上方表单 file-chip） ---------- */
+.file-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 13px;
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, transparent);
+  border-radius: 999px;
+  background: var(--primary-soft); color: var(--primary);
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: all .15s;
+}
+.file-chip:hover { background: var(--primary); color: #fff; }
+.file-manager {
+  display: flex; flex-direction: column; gap: 9px;
+  max-height: 320px; overflow-y: auto;
+  padding-right: 2px;
+}
+.file-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  transition: box-shadow .15s;
+}
+.file-row:hover { box-shadow: var(--shadow-sm); }
+.file-icon { font-size: 19px; flex-shrink: 0; }
+.file-info { flex: 1; min-width: 0; }
+.file-name {
+  font-size: 14px; font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.file-meta { font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
+.file-acts { display: flex; gap: 8px; flex-shrink: 0; }
+.file-empty {
+  padding: 30px 12px; text-align: center;
+  font-size: 13.5px; color: var(--text-secondary);
+  border: 1.5px dashed var(--border-strong); border-radius: 12px;
+}
+
+/* ---------- 附件在线预览 ---------- */
+.preview-modal { width: 880px; max-width: 94vw; }
+.preview-modal .modal-body { overflow: auto; }
+.file-preview-img {
+  max-width: 100%; max-height: 60vh;
+  display: block; margin: 0 auto;
+  border-radius: 10px;
+}
+.file-preview-frame {
+  width: 100%; height: 62vh;
+  border: none; border-radius: 10px;
+  background: #fff;
+}
+.file-preview-sheet {
+  max-height: 60vh; overflow: auto;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface);
+}
+.file-preview-sheet table {
+  border-collapse: collapse; font-size: 12.5px; color: var(--text);
+}
+.file-preview-sheet td, .file-preview-sheet th {
+  border: 1px solid var(--border);
+  padding: 6px 11px; white-space: nowrap;
+}
+.file-preview-sheet th { background: var(--bg); font-weight: 700; }
+.file-preview-pre {
+  max-height: 60vh; overflow: auto;
+  white-space: pre-wrap; word-break: break-all;
+  background: var(--bg);
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px; font-size: 13px; color: var(--text);
+  margin: 0;
+}
 
 </style>
+  <script src="js/vendor/workbuddy-cloud-sdk.js"></script>
+  <script src="js/vendor/pdf.min.js"></script>
+  <script src="js/vendor/ocr/tesseract.min.js"></script>
 </head>
 <body>
+  <!-- 登录页（未登录时显示） -->
+  <div class="login-page" id="loginPage" hidden>
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="logo-mark" id="loginLogoMark">供</div>
+        <h1 id="loginSiteName">供应商管理系统</h1>
+      </div>
+      <p class="login-desc">登录后查看与编辑团队共享的供应商数据</p>
+      <div class="login-form" id="loginForm">
+        <label class="login-field">
+          <span>手机号</span>
+          <input type="tel" id="loginPhone" maxlength="11" placeholder="请输入 11 位手机号" autocomplete="tel" />
+        </label>
+        <label class="login-field">
+          <span>验证码</span>
+          <div class="otp-row">
+            <input type="text" id="loginCode" maxlength="6" placeholder="6 位验证码" autocomplete="one-time-code" />
+            <button type="button" class="btn btn-ghost" id="loginSendCode">获取验证码</button>
+          </div>
+        </label>
+        <button type="button" class="btn btn-primary login-submit" id="loginSubmit">登录 / 注册</button>
+        <div class="login-divider"><span>或</span></div>
+        <button type="button" class="btn btn-wechat" id="loginWechat">微信登录</button>
+        <div class="login-error" id="loginError"></div>
+      </div>
+      <p class="login-foot">登录即表示您同意仅在工作范围内使用本系统数据</p>
+    </div>
+  </div>
+
   <div class="app" id="appShell">
     <!-- 侧边栏 -->
     <aside class="sidebar" id="sidebar">
@@ -556,6 +991,8 @@ body[data-theme="dark"] .star { color: #3a4454; }
           <div class="search-results" id="searchResults"></div>
         </div>
         <div class="topbar-right">
+          <span class="user-chip" id="userChip" title="当前登录账号">未登录</span>
+          <button class="icon-btn" id="logoutBtn" title="退出登录" hidden>⏻</button>
           <label class="user-label">当前身份</label>
           <select class="user-select" id="currentUserSelect" title="切换当前身份（用于权限模拟）"></select>
           <button class="icon-btn" id="designToggle" title="界面设计器">🎨</button>
@@ -615,6 +1052,8 @@ body[data-theme="dark"] .star { color: #3a4454; }
     </div>
   </aside>
 
+  <script src="js/vendor/xlsx.full.min.js"></script>
+  <script src="js/vendor/pdf.min.js"></script>
   <script>
 /* ========== 供应商管理系统 · 完整业务逻辑 ========== */
 (function () {
@@ -664,17 +1103,71 @@ body[data-theme="dark"] .star { color: #3a4454; }
     try { document.execCommand("copy"); } catch (e) {}
     ta.remove(); cb && cb();
   }
-  function readFiles(input, cb) {
+  /* ---------- 附件云端存储（cloud.storage runtime 桶） ---------- */
+  function fileStoragePrefix() {
+    var uid = (session && session.user && (session.user.id || session.user.sub)) || "anon";
+    return "users/" + String(uid).replace(/[^A-Za-z0-9._-]/g, "_") + "/spm";
+  }
+  function hasCloudStorage() { return !!(cloud && cloud.storage); }
+  function b64ToBlob(b64, type) {
+    var bin = atob(b64);
+    var arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: type || "application/octet-stream" });
+  }
+  // 取附件 DataURL：优先内存缓存；storagePath 则从云端下载（结果缓存在 f.dataUrl）
+  function fileDataUrlAsync(f) {
+    if (f.dataUrl) return Promise.resolve(f.dataUrl);
+    if (f.storagePath && hasCloudStorage()) {
+      return cloud.storage.runtime.download(f.storagePath).then(function (res) {
+        if (res.error || !res.data) return null;
+        var blob = res.data;
+        return new Promise(function (resolve) {
+          var r = new FileReader();
+          r.onload = function () { f.dataUrl = r.result; resolve(r.result); };
+          r.onerror = function () { resolve(null); };
+          r.readAsDataURL(blob);
+        });
+      }).catch(function () { return null; });
+    }
+    return Promise.resolve(null);
+  }
+  // 上传文件到云端存储；成功返回 storagePath，失败返回 null（降级为本地 base64）
+  function uploadFileToStorage(uploadDir, file) {
+    if (!hasCloudStorage() || !uploadDir) return Promise.resolve(null);
+    var ext = String(file.name || "").toLowerCase().split(".").pop().replace(/[^a-z0-9]/g, "").slice(0, 10);
+    var path = fileStoragePrefix() + "/" + uploadDir + "/" + uid() + (ext ? "." + ext : "");
+    return cloud.storage.runtime.upload(path, file).then(function (res) {
+      if (!res.error && res.data) return path;
+      return null;
+    }).catch(function () { return null; });
+  }
+  function readFiles(input, uploadDir, cb) {
     var files = Array.prototype.slice.call(input.files || []);
-    var out = [], done = 0;
     if (!files.length) { cb([]); return; }
-    files.forEach(function (f) {
-      if (f.size > 2 * 1024 * 1024) { toast("文件「" + f.name + "」超过 2MB，已跳过"); done++; if (done === files.length) cb(out); return; }
-      var r = new FileReader();
-      r.onload = function () { out.push({ name: f.name, size: f.size, type: f.type, dataUrl: r.result }); done++; if (done === files.length) cb(out); };
-      r.onerror = function () { done++; if (done === files.length) cb(out); };
-      r.readAsDataURL(f);
+    var out = new Array(files.length), pending = 0;
+    function done() { pending--; if (pending <= 0) cb(out.filter(function (x) { return !!x; })); }
+    files.forEach(function (f, idx) {
+      if (f.size > 5 * 1024 * 1024) { toast("文件「" + f.name + "」超过 5MB，已跳过"); return; }
+      pending++;
+      var meta = { name: f.name, size: f.size, type: f.type };
+      function fallback() {
+        var r = new FileReader();
+        r.onload = function () { out[idx] = Object.assign({}, meta, { dataUrl: r.result }); done(); };
+        r.onerror = function () { done(); };
+        r.readAsDataURL(f);
+      }
+      uploadFileToStorage(uploadDir, f).then(function (path) {
+        if (path) { out[idx] = Object.assign({}, meta, { storagePath: path }); done(); }
+        else fallback();
+      });
     });
+  }
+  function fmtSize(n) {
+    n = n || 0;
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+    return (n / 1024 / 1024).toFixed(2) + " MB";
   }
 
   /* ================= 常量与默认配置 ================= */
@@ -690,6 +1183,7 @@ body[data-theme="dark"] .star { color: #3a4454; }
     supplierCategories: ["美术", "素材", "音频", "外派", "本地化"],
     demandCategories: ["角色原画", "场景原画", "角色动画", "场景动画", "角色模型", "场景模型", "图标", "UI"],
     members: ["何捷", "于涛", "黄志鹏", "徐峰", "徐芝芝", "陈宇飞", "王薪清"],
+    ourParties: ["大乐至简科技（北京）有限公司", "天天玩家科技（北京）有限公司", "成都天天玩家科技有限公司", "Happibits"],
     projectGroups: {}, // { 项目: [成员名, ...] }
     currentUser: "管理员"
   };
@@ -702,36 +1196,312 @@ body[data-theme="dark"] .star { color: #3a4454; }
     widgets: "spm_widgets_v1"
   };
 
-  /* ================= 数据层 ================= */
-  function load(key, def) {
+  /* ================= 云服务配置 ================= */
+  var CLOUD_CONFIG = {
+    endpoint: "https://supplier-system-63852.app.workbuddy.host",
+    oauthRelayBaseUrl: "https://www.workbuddy.cn/v2/as/genie-baas/oauth",
+    publishableKey: "wbpk_UMoGSCv5mTQ3E6OUdsm2PE_ASkqHCufzge9Z3WxiWtWkT0GQvf9xZkq"
+  };
+  var cloud = null;
+  var session = null;
+  var cacheMeta = {};       // key -> 云端 updated_at（本地已知的最新值）
+  var pendingSaves = {};    // key -> 待写入值
+  var saveTimers = {};      // key -> 防抖定时器
+  var syncTimer = null;
+  var onboardApps = [];     // 待审核的自助入库申请
+
+  /* ================= 数据层（云端共享 + 本地迁移源） ================= */
+  function loadLocal(key, def) {
     try { var r = localStorage.getItem(key); if (r) return JSON.parse(r); } catch (e) {}
     return def;
   }
-  function save(key, val) {
-    try { localStorage.setItem(key, JSON.stringify(val)); }
-    catch (e) { toast("保存失败：本地存储空间不足（附件过多）"); }
+  function hasLocalData() {
+    return [KEYS.config, KEYS.suppliers, KEYS.demands, KEYS.contracts, KEYS.widgets].some(function (k) {
+      return localStorage.getItem(k) != null;
+    });
   }
 
-  var config = load(KEYS.config, {});
-  (function mergeConfig() {
+  function cloudLoad(key, def) {
+    return cloud.database.from("spm_state").select("data, updated_at").eq("key", key).maybeSingle()
+      .then(function (res) {
+        if (res.error) throw res.error;
+        if (!res.data) return { value: def, meta: null };
+        cacheMeta[key] = res.data.updated_at;
+        return { value: res.data.data == null ? def : res.data.data, meta: res.data.updated_at };
+      });
+  }
+
+  function debouncePersist(key) {
+    if (saveTimers[key]) clearTimeout(saveTimers[key]);
+    saveTimers[key] = setTimeout(function () {
+      var val = pendingSaves[key];
+      delete pendingSaves[key];
+      delete saveTimers[key];
+      persistNow(key, val);
+    }, 600);
+  }
+
+  // 云端主数据瘦身：
+  // 1) 已存云存储的附件（storagePath）不带 dataUrl 缓存；
+  // 2) 尚未迁移的 base64 附件：dataUrl 不进主数据（避免请求体超限），打 _pendingUpload 标记，
+  //    内容由 localStorage 备份 + 后台迁移到云存储保证（见 migrateFilesToStorage）
+  function stripCachedDataUrls(val) {
+    try {
+      var obj = JSON.parse(JSON.stringify(val));
+      (function walk(x) {
+        if (Array.isArray(x)) { x.forEach(walk); return; }
+        if (x && typeof x === "object") {
+          if (x.storagePath && typeof x.dataUrl === "string") { delete x.dataUrl; delete x._pendingUpload; }
+          else if (x.dataUrl && typeof x.dataUrl === "string" && typeof x.name === "string") {
+            delete x.dataUrl;
+            x._pendingUpload = true;
+          }
+          for (var k in x) walk(x[k]);
+        }
+      })(obj);
+      return obj;
+    } catch (e) { return val; }
+  }
+  function persistNow(key, val) {
+    if (!cloud) return;
+    cloud.database.from("spm_state")
+      .upsert({ key: key, data: stripCachedDataUrls(val), updated_at: new Date().toISOString() })
+      .select("updated_at")
+      .then(function (res) {
+        if (res.error) { toast("保存失败：" + (res.error.message || "云端异常")); return; }
+        if (res.data && res.data[0]) cacheMeta[key] = res.data[0].updated_at;
+        // 保存成功后顺带推进历史附件迁移（幂等，无待迁移附件时立即返回）
+        setTimeout(migrateFilesToStorage, 1200);
+      })
+      .catch(function () { toast("保存失败：网络异常，请稍后重试"); });
+  }
+
+  function save(key, val) {
+    pendingSaves[key] = val;
+    debouncePersist(key);
+  }
+
+  /* ================= 应用状态 ================= */
+  var config = loadLocal(KEYS.config, {});
+  function mergeConfig() {
     var d = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
     for (var k in d) { if (config[k] === undefined) config[k] = d[k]; }
-  })();
+  }
+  mergeConfig();
 
-  var suppliers = load(KEYS.suppliers, []);
-  var demands = load(KEYS.demands, []);
-  var contracts = load(KEYS.contracts, []);
-  var widgets = load(KEYS.widgets, null);
+  var suppliers = loadLocal(KEYS.suppliers, []);
+  var demands = loadLocal(KEYS.demands, []);
+  var contracts = loadLocal(KEYS.contracts, []);
+  var widgets = loadLocal(KEYS.widgets, null);
 
-  // 数据迁移：为历史需求单补全 settlement 子结构
-  demands.forEach(function (d) {
-    if (!d.settlement) d.settlement = { completion: 0, settleFiles: [], invoiceFiles: [], confirmed: false };
-    if (!d.attr) d.attr = "正式需求";
-    if (!d.status) d.status = "未开始";
-    if (d.quoteCurrency === undefined) d.quoteCurrency = "RMB";
-  });
+  function migrateDemands() {
+    // 数据迁移：为历史需求单补全 settlement 子结构
+    demands.forEach(function (d) {
+      if (!d.settlement) d.settlement = { completion: 0, settleFiles: [], invoiceFiles: [], confirmed: false };
+      if (!d.attr) d.attr = "正式需求";
+      if (!d.status) d.status = "未开始";
+      if (d.quoteCurrency === undefined) d.quoteCurrency = "RMB";
+      if (!Array.isArray(d.scheduleFiles)) d.scheduleFiles = [];
+      if (d.totalManDays == null) d.totalManDays = "";
+      // 发包月份按记录创建日期自动生成（保留已手动填写的值）
+      if (!d.dispatchMonth && d.createdAt) d.dispatchMonth = String(d.createdAt).slice(0, 7);
+    });
+  }
+  migrateDemands();
 
-  function saveConfig() { save(KEYS.config, config); }
+  // 合同流转状态（流程按钮依次推进）
+  var FLOW_STEPS = ["未提审批", "已提审批", "已邮寄", "已归档"];
+  function migrateContracts() {
+    contracts.forEach(function (ct) {
+      if (!ct.flowStatus || FLOW_STEPS.indexOf(ct.flowStatus) < 0) ct.flowStatus = "未提审批";
+      if (!Array.isArray(ct.files)) ct.files = [];
+      ["payeeName", "bankName", "bankAccount", "swiftCode"].forEach(function (k) {
+        if (ct[k] == null) ct[k] = "";
+      });
+    });
+  }
+  migrateContracts();
+
+  async function loadAllFromCloud() {
+    var r1 = await cloudLoad(KEYS.config, {});
+    var r2 = await cloudLoad(KEYS.suppliers, []);
+    var r3 = await cloudLoad(KEYS.demands, []);
+    var r4 = await cloudLoad(KEYS.contracts, []);
+    var r5 = await cloudLoad(KEYS.widgets, null);
+    config = r1.value || {};
+    mergeConfig();
+    config.currentUser = loadLocal("spm_current_user", "管理员");
+    suppliers = r2.value || [];
+    demands = r3.value || [];
+    contracts = r4.value || [];
+    widgets = r5.value == null ? null : r5.value;
+    migrateDemands();
+    migrateContracts();
+  }
+
+  async function migrateLocalToCloud() {
+    var pairs = [
+      [KEYS.config, config],
+      [KEYS.suppliers, suppliers],
+      [KEYS.demands, demands],
+      [KEYS.contracts, contracts],
+      [KEYS.widgets, widgets]
+    ];
+    for (var i = 0; i < pairs.length; i++) {
+      if (localStorage.getItem(pairs[i][0]) != null && pairs[i][1] != null) {
+        await cloud.database.from("spm_state").upsert({
+          key: pairs[i][0], data: pairs[i][1], updated_at: new Date().toISOString()
+        });
+      }
+    }
+  }
+
+  /* ================= 历史附件迁移（base64 → 云存储） ================= */
+  var ATTACH_BACKUP_KEY = "spm_attach_backup_v1";
+  var migrationBackup = null;
+
+  function backupKeyOf(dir, f) { return dir + "|" + (f.name || "") + "|" + (f.size || 0); }
+  function loadBackup() {
+    if (!migrationBackup) {
+      migrationBackup = loadLocal(ATTACH_BACKUP_KEY, {});
+      if (!migrationBackup || typeof migrationBackup !== "object") migrationBackup = {};
+    }
+    return migrationBackup;
+  }
+  function persistBackup() {
+    var bak = loadBackup();
+    var n = 0; for (var k in bak) { n++; break; }
+    try {
+      if (n) localStorage.setItem(ATTACH_BACKUP_KEY, JSON.stringify(bak));
+      else { localStorage.removeItem(ATTACH_BACKUP_KEY); migrationBackup = null; }
+    } catch (e) { /* 本地存储满：备份失败时迁移过程会因 upload 成功才删数据，风险可控 */ }
+  }
+  function removeBackupEntry(dir, f) {
+    var bak = loadBackup();
+    var k = backupKeyOf(dir, f);
+    if (bak[k]) { delete bak[k]; persistBackup(); }
+  }
+
+  // 收集所有附件组：[存储目录, 附件数组]
+  function collectAttachments(out) {
+    contracts.forEach(function (ct) { out.push(["contracts/" + ct.id, ct.files]); });
+    demands.forEach(function (d) {
+      out.push(["demands/" + d.id, d.scheduleFiles]);
+      if (d.settlement) {
+        out.push(["demands/" + d.id + "/settle", d.settlement.settleFiles]);
+        out.push(["demands/" + d.id + "/invoice", d.settlement.invoiceFiles]);
+      }
+    });
+    suppliers.forEach(function (sp) {
+      out.push(["suppliers/" + sp.id, sp.introFiles]);
+      out.push(["suppliers/" + sp.id + "/license", sp.licenseFiles]);
+    });
+  }
+
+  // 启动时恢复：云端数据中 _pendingUpload 附件（内容被剥离）从本地备份回填 dataUrl
+  function restorePendingAttachments() {
+    var bak = loadBackup();
+    var has = false; for (var k in bak) { has = true; break; }
+    if (!has) return;
+    var groups = [];
+    collectAttachments(groups);
+    groups.forEach(function (g) {
+      (g[1] || []).forEach(function (f) {
+        if (f._pendingUpload && !f.storagePath && !f.dataUrl) {
+          var v = bak[backupKeyOf(g[0], f)];
+          if (v) { f.dataUrl = v; delete f._pendingUpload; }
+        }
+      });
+    });
+  }
+
+  // 历史 base64 附件迁移：上传到云存储并替换为 storagePath（后台静默执行）
+  function migrateFilesToStorage() {
+    if (window.__migRunning) return;
+    if (!hasCloudStorage() || !session || !session.user || !(session.user.id || session.user.sub)) return;
+    var groups = [];
+    collectAttachments(groups);
+    var targets = [];
+    groups.forEach(function (g) {
+      (g[1] || []).forEach(function (f) {
+        if (!f.storagePath && f.dataUrl) targets.push({ f: f, dir: g[0], tries: 0 });
+      });
+    });
+    if (!targets.length) return;
+    window.__migRunning = true;
+    // 备份所有待迁移附件内容到 localStorage（上传失败/中途刷新也不丢数据）
+    var bak = loadBackup();
+    var bakChanged = false;
+    targets.forEach(function (t) {
+      var k = backupKeyOf(t.dir, t.f);
+      if (t.f.dataUrl && bak[k] !== t.f.dataUrl) { bak[k] = t.f.dataUrl; bakChanged = true; }
+    });
+    if (bakChanged) { persistBackup(); toast("正在同步 " + targets.length + " 个历史附件到云端（自动完成，期间可正常使用）"); }
+    var changed = false;
+    var removedKeys = [];
+    function next() {
+      var t = targets.shift();
+      if (!t) {
+        window.__migRunning = false;
+        if (removedKeys.length) {
+          removedKeys.forEach(function (k) { if (bak[k]) delete bak[k]; });
+          persistBackup();
+        }
+        if (changed) { saveContracts(); saveDemands(); saveSuppliers(); }
+        return;
+      }
+      var b64 = String(t.f.dataUrl || "").split(",")[1];
+      if (!b64) { next(); return; }
+      var ext = String(t.f.name || "").toLowerCase().split(".").pop().replace(/[^a-z0-9]/g, "").slice(0, 10);
+      var path = fileStoragePrefix() + "/" + t.dir + "/" + uid() + (ext ? "." + ext : "");
+      var blob = b64ToBlob(b64, t.f.type);
+      cloud.storage.runtime.upload(path, blob).then(function (res) {
+        if (!res.error && res.data) {
+          t.f.storagePath = path;
+          delete t.f.dataUrl;
+          delete t.f._pendingUpload;
+          removedKeys.push(backupKeyOf(t.dir, t.f));
+          changed = true;
+        } else {
+          t.tries++;
+          if (t.tries < 3) targets.push(t); else t.f._pendingUpload = true;
+        }
+        next();
+      }).catch(function () {
+        t.tries++;
+        if (t.tries < 3) targets.push(t); else t.f._pendingUpload = true;
+        next();
+      });
+    }
+    next();
+  }
+
+  async function enterApp() {
+    var cfgProbe = await cloudLoad(KEYS.config, {});
+    if (cfgProbe.meta === null && hasLocalData()) {
+      // 首次使用云版：把本机旧数据一次性迁移到云端
+      await migrateLocalToCloud();
+    }
+    await loadAllFromCloud();
+    restorePendingAttachments();
+
+    buildDesignerUI();
+    applyDesign();
+    buildUserSelect();
+    initSearch();
+    await loadOnboardApps();
+    if (!location.hash) location.hash = "#/dashboard";
+    render();
+    startSync();
+    migrateFilesToStorage();
+  }
+
+  function saveConfig() {
+    localStorage.setItem("spm_current_user", JSON.stringify(config.currentUser || "管理员"));
+    var c = JSON.parse(JSON.stringify(config));
+    delete c.currentUser;
+    save(KEYS.config, c);
+  }
   function saveSuppliers() { save(KEYS.suppliers, suppliers); }
   function saveDemands() { save(KEYS.demands, demands); }
   function saveContracts() { save(KEYS.contracts, contracts); }
@@ -859,10 +1629,11 @@ body[data-theme="dark"] .star { color: #3a4454; }
   });
   designSave.addEventListener("click", function () { saveConfig(); closeDesigner(); toast("已保存设计"); });
   designReset.addEventListener("click", function () {
-    if (!window.confirm("确定恢复默认设计？当前自定义内容将丢失。")) return;
-    var keep = { siteName: DEFAULT_CONFIG.siteName, logoMark: DEFAULT_CONFIG.logoMark, primaryColor: DEFAULT_CONFIG.primaryColor, theme: "light" };
-    for (var k in keep) config[k] = keep[k];
-    saveConfig(); buildDesignerUI(); fillDesignerInputs(); applyDesign(); toast("已恢复默认");
+    confirmDialog("恢复确认", "确定恢复默认设计吗？", function () {
+      var keep = { siteName: DEFAULT_CONFIG.siteName, logoMark: DEFAULT_CONFIG.logoMark, primaryColor: DEFAULT_CONFIG.primaryColor, theme: "light" };
+      for (var k in keep) config[k] = keep[k];
+      saveConfig(); buildDesignerUI(); fillDesignerInputs(); applyDesign(); toast("已恢复默认");
+    }, "确定", "btn btn-primary");
   });
 
   /* ================= 弹窗 ================= */
@@ -883,12 +1654,46 @@ body[data-theme="dark"] .star { color: #3a4454; }
   function closeModal() { $("modalOverlay").classList.remove("show"); $("modal").classList.remove("open"); }
   $("modalOverlay").addEventListener("click", closeModal);
 
+  /* 居中确认弹窗（替代浏览器原生 confirm） */
+  function copyText(txt, tip) {
+    txt = String(txt == null ? "" : txt);
+    function ok() { toast(tip || "已复制"); }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = txt;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      try { document.execCommand("copy"); ok(); } catch (e) { toast("复制失败，请手动复制"); }
+      ta.remove();
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(ok, fallback);
+    } else {
+      fallback();
+    }
+  }
+
+  function confirmDialog(title, msg, onYes, okText, okClass) {
+    var body = el("div", "confirm-dialog");
+    body.appendChild(el("div", "confirm-text", msg));
+    var foot = el("div");
+    var cancel = el("button", "btn btn-ghost", "取消");
+    cancel.addEventListener("click", closeModal);
+    var ok = el("button", okClass || "btn btn-danger", okText || "确定删除");
+    ok.addEventListener("click", function () { closeModal(); if (onYes) onYes(); });
+    foot.appendChild(cancel); foot.appendChild(ok);
+    openModal(title || "删除确认", body, foot, true);
+  }
+
   /* ================= 表单构建助手 ================= */
-  function fieldRow(labelText, control, required, full) {
+  function fieldRow(labelText, control, required, full, hint) {
     var f = el("div", "form-field" + (full ? " full" : ""));
     var lab = el("label");
     lab.textContent = labelText;
     if (required) { var r = el("span", "req", "*"); lab.appendChild(r); }
+    if (hint) lab.appendChild(el("span", "label-hint", hint));
     f.appendChild(lab);
     f.appendChild(control);
     return f;
@@ -947,7 +1752,7 @@ body[data-theme="dark"] .star { color: #3a4454; }
   function getGroupValues(root, groupName) {
     return Array.prototype.slice.call(root.querySelectorAll('input[type="checkbox"][name="' + groupName + '"]:checked')).map(function (c) { return c.value; });
   }
-  function fileField(filesArr, onChange) {
+  function fileField(filesArr, onChange, uploadDir) {
     var wrap = el("div");
     function draw() {
       wrap.innerHTML = "";
@@ -956,23 +1761,1032 @@ body[data-theme="dark"] .star { color: #3a4454; }
         var chip = el("div", "file-chip");
         chip.appendChild(el("span", "fname", f.name));
         chip.appendChild(el("span", "fsize", f.size ? (f.size / 1024).toFixed(0) + "KB" : ""));
-        var dl = el("a"); dl.textContent = "下载"; dl.href = f.dataUrl; dl.download = f.name; dl.target = "_blank";
+        if (canPreview(f)) {
+          var pv = el("a"); pv.textContent = "预览"; pv.style.cursor = "pointer";
+          pv.addEventListener("click", function () { openFilePreview(f); });
+          chip.appendChild(pv);
+        }
+        var dl = el("a"); dl.textContent = "下载"; dl.style.cursor = "pointer";
+        dl.addEventListener("click", function () {
+          fileDataUrlAsync(f).then(function (durl) {
+            if (!durl) { toast("附件下载失败，请稍后重试"); return; }
+            var a = document.createElement("a");
+            a.href = durl; a.download = f.name || "附件";
+            document.body.appendChild(a); a.click(); a.remove();
+          });
+        });
         var rm = el("a"); rm.textContent = "移除"; rm.style.cursor = "pointer";
-        rm.addEventListener("click", function () { filesArr.splice(i, 1); onChange(filesArr); draw(); });
+        rm.addEventListener("click", function () {
+          var removed = filesArr.splice(i, 1)[0];
+          if (removed && removed.storagePath && hasCloudStorage()) {
+            cloud.storage.runtime.remove([removed.storagePath]).catch(function () {});
+          }
+          removeBackupEntry(uploadDir, removed);
+          onChange(filesArr); draw();
+        });
         chip.appendChild(dl); chip.appendChild(rm);
         list.appendChild(chip);
       });
       var add = el("label", "file-add"); add.appendChild(document.createTextNode("📎 上传附件"));
       var inp = el("input"); inp.type = "file"; inp.multiple = true; add.appendChild(inp);
       inp.addEventListener("change", function () {
-        readFiles(inp, function (nf) { if (nf.length) { filesArr = filesArr.concat(nf); onChange(filesArr); draw(); } });
+        readFiles(inp, uploadDir, function (nf) { if (nf.length) { filesArr = filesArr.concat(nf); onChange(filesArr); draw(); } });
       });
       wrap.appendChild(list); wrap.appendChild(add);
-      wrap.appendChild(el("div", "file-hint", "图片/文档均可，单个不超过 2MB，保存在本浏览器"));
+      wrap.appendChild(el("div", "file-hint", "图片/文档均可，单个不超过 5MB；上传合同文件（docx/PDF）可自动识别正文信息"));
     }
     draw();
     return wrap;
   }
+  /* ================= 排期报价表识别 ================= */
+  function normalizeCellText(v) {
+    if (v == null) return "";
+    return String(v).replace(/\u00a0/g, " ").trim();
+  }
+  function excelSerialToDate(v) {
+    var n = Number(v);
+    if (!isFinite(n) || n < 20000 || n > 80000) return "";
+    var d = new Date(Math.round((n - 25569) * 86400 * 1000));
+    return d.getUTCFullYear() + "-" + String(d.getUTCMonth() + 1).padStart(2, "0") + "-" + String(d.getUTCDate()).padStart(2, "0");
+  }
+  function parseDateValue(v) {
+    if (v instanceof Date && !isNaN(v.getTime())) {
+      return v.getFullYear() + "-" + String(v.getMonth() + 1).padStart(2, "0") + "-" + String(v.getDate()).padStart(2, "0");
+    }
+    if (typeof v === "number") return excelSerialToDate(v);
+    var s = normalizeCellText(v);
+    if (!s) return "";
+    var m = s.match(/(\d{4})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})/);
+    if (m) return m[1] + "-" + String(Number(m[2])).padStart(2, "0") + "-" + String(Number(m[3])).padStart(2, "0");
+    m = s.match(/(\d{4})(\d{2})(\d{2})/);
+    if (m && Number(m[2]) >= 1 && Number(m[2]) <= 12 && Number(m[3]) >= 1 && Number(m[3]) <= 31) return m[1] + "-" + m[2] + "-" + m[3];
+    m = s.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
+    if (m) return m[3] + "-" + String(Number(m[1])).padStart(2, "0") + "-" + String(Number(m[2])).padStart(2, "0");
+    return "";
+  }
+  function parseAmountValue(v) {
+    if (typeof v === "number" && isFinite(v)) return { amount: String(v), currency: "RMB" };
+    var s = normalizeCellText(v);
+    if (!s) return null;
+    var currency = /[$＄]|usd/i.test(s) ? "USD" : "RMB";
+    var m = s.replace(/[,，\s]/g, "").match(/-?\d+(?:\.\d+)?/);
+    if (!m) return null;
+    return { amount: m[0], currency: currency };
+  }
+  // 排期报价表字段标签正则（scanInline 与横排表头共用）
+  var SCHEDULE_LABEL_RE = "(?:开始时间|开始日期|开工日期|开工时间|DDL|deadline|最终提交日期|最终提交时间|最终提交|提交日期|提交时间|交稿日期|交稿时间|终稿日期|终稿时间|截止时间|截止日期|交付日期|交付时间|完工日期|完工时间|报价|总价|预算|金额|费用|总人天|人天|总工时|工时|工作量)";
+
+  function matchFieldLabel(label) {
+    var l = label.toLowerCase();
+    if (/ddl|deadline|due\b|截止|交付|提交|交稿|终稿|完工/.test(l)) return "ddl";
+    if (/开始/.test(l) && /时间|日期|日/.test(l)) return "dispatchDate";
+    if (/人天|工时|工作量|man[- ]?day/.test(l)) return "totalManDays";
+    if (/报价|金额|总价|价格|预算|费用|quote|price|total|amount/.test(l)) return "quoteAmount";
+    return "";
+  }
+  function parseManDaysValue(v) {
+    if (typeof v === "number" && isFinite(v)) return String(v);
+    var s = normalizeCellText(v);
+    if (!s) return "";
+    var m = s.replace(/[,，\s]/g, "").match(/\d+(?:\.\d+)?/);
+    return m ? m[0] : "";
+  }
+  function extractSchedule(rows) {
+    var out = { dispatchDate: "", ddl: "", quoteAmount: "", quoteCurrency: "RMB", totalManDays: "", hits: [] };
+    function setOnce(key, val, currency) {
+      if (out[key]) return;
+      out[key] = val;
+      if (currency === "USD") out.quoteCurrency = "USD";
+      if (out.hits.indexOf(key) < 0) out.hits.push(key);
+    }
+    function scanInline(cellText) {
+      var re = new RegExp("(" + SCHEDULE_LABEL_RE + ")\\s*[：:]\\s*([^：:]*?)(?=" + SCHEDULE_LABEL_RE + "\\s*[：:]|$)", "gi");
+      var m;
+      while ((m = re.exec(cellText))) {
+        var key = matchFieldLabel(m[1]);
+        var val = m[2].trim();
+        if (!val) continue;
+        if (key === "dispatchDate") { var ds = parseDateValue(val); if (ds) setOnce("dispatchDate", ds); }
+        else if (key === "ddl") { var dl = parseDateValue(val); if (dl) setOnce("ddl", dl); }
+        else if (key === "quoteAmount") { var am = parseAmountValue(val); if (am) setOnce("quoteAmount", am.amount, am.currency); }
+        else if (key === "totalManDays") { var md = parseManDaysValue(val); if (md) setOnce("totalManDays", md); }
+      }
+    }
+    (rows || []).forEach(function (row) {
+      if (!row || !row.length) return;
+      var key = matchFieldLabel(normalizeCellText(row[0]));
+      if (key) {
+        for (var i = 1; i < row.length; i++) {
+          if (normalizeCellText(row[i]) === "") continue;
+          if (key === "dispatchDate") { var ds = parseDateValue(row[i]); if (ds) setOnce("dispatchDate", ds); }
+          else if (key === "ddl") { var dl = parseDateValue(row[i]); if (dl) setOnce("ddl", dl); }
+          else if (key === "quoteAmount") { var am = parseAmountValue(row[i]); if (am) setOnce("quoteAmount", am.amount, am.currency); }
+          else if (key === "totalManDays") { var md = parseManDaysValue(row[i]); if (md) setOnce("totalManDays", md); }
+          break;
+        }
+      }
+      row.forEach(function (cell) { scanInline(normalizeCellText(cell)); });
+    });
+    // 横排式：表头行含字段标签，值在同一列的数据行
+    var labelRe = new RegExp("^(?:" + SCHEDULE_LABEL_RE + ")$", "i");
+    var colHits = {};
+    (rows || []).forEach(function (row) {
+      (row || []).forEach(function (cell, ci) {
+        var t = normalizeCellText(cell);
+        if (labelRe.test(t)) {
+          var k = matchFieldLabel(t);
+          if (k) colHits[ci] = k;
+        }
+      });
+    });
+    (rows || []).forEach(function (row) {
+      Object.keys(colHits).forEach(function (ci) {
+        var key = colHits[ci];
+        var v = (row || [])[Number(ci)];
+        if (normalizeCellText(v) === "") return;
+        if (key === "dispatchDate") { var ds = parseDateValue(v); if (ds) setOnce("dispatchDate", ds); }
+        else if (key === "ddl") { var dl = parseDateValue(v); if (dl) setOnce("ddl", dl); }
+        else if (key === "quoteAmount") { var am = parseAmountValue(v); if (am) setOnce("quoteAmount", am.amount, am.currency); }
+        else if (key === "totalManDays") { var md = parseManDaysValue(v); if (md) setOnce("totalManDays", md); }
+      });
+    });
+    return out;
+  }
+  function parseScheduleFile(f, cb) {
+    var name = (f.name || "").toLowerCase();
+    var ext = name.split(".").pop();
+    if (["xlsx", "xls", "csv"].indexOf(ext) < 0) { cb(null); return; }
+    if (!window.XLSX) { cb(null); return; }
+    try {
+      var b64 = String(f.dataUrl || "").split(",")[1];
+      if (!b64) { cb(null); return; }
+      var bin = atob(b64);
+      var arr = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      var wb = XLSX.read(arr, { type: "array", codepage: 65001 });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      if (!ws) { cb(null); return; }
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
+      cb(extractSchedule(rows));
+    } catch (e) { cb(null); }
+  }
+
+  /* ================= 附件在线预览 ================= */
+  function canPreview(f) {
+    var ext = String(f.name || "").toLowerCase().split(".").pop() || "";
+    if (["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "ico"].indexOf(ext) >= 0) return "img";
+    if (ext === "pdf") return "pdf";
+    if (["xlsx", "xls", "csv"].indexOf(ext) >= 0) return "sheet";
+    if (["txt", "md", "log", "json", "js", "css", "html", "htm", "xml"].indexOf(ext) >= 0) return "text";
+    return "";
+  }
+  function sheetTableFromDataUrl(dataUrl) {
+    try {
+      if (!window.XLSX) return "";
+      var b64 = String(dataUrl || "").split(",")[1];
+      if (!b64) return "";
+      var bin = atob(b64);
+      var arr = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      var wb = XLSX.read(arr, { type: "array", codepage: 65001 });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      if (!ws) return "";
+      var h = XLSX.utils.sheet_to_html(ws);
+      var i1 = h.indexOf("<table");
+      var i2 = h.lastIndexOf("</table>");
+      if (i1 < 0 || i2 < 0) return "";
+      return h.slice(i1, i2 + 8);
+    } catch (e) { return ""; }
+  }
+  var pvOverlay = null;
+  function closeFilePreview() {
+    if (pvOverlay) { pvOverlay.remove(); pvOverlay = null; }
+  }
+  function openFilePreview(f) {
+    var kind = canPreview(f);
+    if (!kind) { toast("该格式暂不支持在线预览，请下载查看"); return; }
+    closeFilePreview();
+    var body = el("div");
+    body.appendChild(el("div", "muted", "附件加载中…"));
+    var ov = el("div", "modal-overlay show");
+    ov.addEventListener("click", function (e) { if (e.target === ov) closeFilePreview(); });
+    var m = el("div", "modal open preview-modal");
+    var head = el("div", "modal-head");
+    head.appendChild(el("div", "modal-title", "预览：" + (f.name || "附件")));
+    var cb = el("button", "icon-btn", "✕"); cb.title = "关闭"; cb.addEventListener("click", closeFilePreview);
+    head.appendChild(cb);
+    var mbody = el("div", "modal-body"); mbody.appendChild(body);
+    var foot = el("div", "modal-foot");
+    var dl = el("button", "btn btn-ghost", "下载");
+    dl.addEventListener("click", function () {
+      fileDataUrlAsync(f).then(function (durl) {
+        if (!durl) { toast("附件下载失败，请稍后重试"); return; }
+        var a = document.createElement("a");
+        a.href = durl; a.download = f.name || "附件";
+        document.body.appendChild(a); a.click(); a.remove();
+      });
+    });
+    foot.appendChild(dl);
+    var closeBtn = el("button", "btn btn-primary", "关闭");
+    closeBtn.addEventListener("click", closeFilePreview);
+    foot.appendChild(closeBtn);
+    m.appendChild(head); m.appendChild(mbody); m.appendChild(foot);
+    ov.appendChild(m);
+    document.body.appendChild(ov);
+    pvOverlay = ov;
+    fileDataUrlAsync(f).then(function (durl) {
+      if (!pvOverlay || pvOverlay !== ov) return; // 已关闭
+      body.innerHTML = "";
+      if (!durl) {
+        body.appendChild(el("div", "muted", "附件加载失败，请点击「下载」重试"));
+        return;
+      }
+      if (kind === "img") {
+        var img = document.createElement("img");
+        img.src = durl; img.className = "file-preview-img"; img.alt = f.name;
+        body.appendChild(img);
+      } else if (kind === "pdf") {
+        var frame = document.createElement("iframe");
+        frame.src = durl; frame.className = "file-preview-frame"; frame.title = f.name;
+        body.appendChild(frame);
+        body.appendChild(el("div", "muted", "如无法显示，请点击下方「下载」后打开"));
+      } else if (kind === "sheet") {
+        var box = el("div", "file-preview-sheet");
+        var html = sheetTableFromDataUrl(durl);
+        if (html) { box.innerHTML = html; }
+        else { box.appendChild(el("div", "muted", "表格解析失败，请下载查看")); }
+        body.appendChild(box);
+      } else {
+        var pre = document.createElement("pre");
+        pre.className = "file-preview-pre";
+        try {
+          var b64 = String(durl || "").split(",")[1] || "";
+          pre.textContent = b64 ? decodeURIComponent(escape(atob(b64))) : "（空文件）";
+        } catch (e) { pre.textContent = "文本读取失败，请下载查看"; }
+        body.appendChild(pre);
+      }
+    });
+  }
+  // 通用附件管理弹窗：预览/下载/删除/追加上传
+  function openFileManager(title, filesArr, onChanged, afterClose, hint, onAdd, uploadDir) {
+    if (!Array.isArray(filesArr)) return;
+    var body = el("div");
+    if (hint) body.appendChild(el("div", "muted", hint));
+    var listWrap = el("div", "file-manager");
+    function fileRow(f, idx) {
+      var row = el("div", "file-row");
+      var icon = el("div", "file-icon", "📄");
+      var info = el("div", "file-info");
+      info.appendChild(el("div", "file-name", f.name));
+      info.appendChild(el("div", "file-meta", fmtSize(f.size || 0)));
+      var acts = el("div", "file-acts");
+      if (canPreview(f)) {
+        var pv = el("button", "link-btn", "预览");
+        pv.addEventListener("click", function () { openFilePreview(f); });
+        acts.appendChild(pv);
+      }
+      var dl = el("button", "link-btn", "下载");
+      dl.addEventListener("click", function () {
+        fileDataUrlAsync(f).then(function (durl) {
+          if (!durl) { toast("附件下载失败，请稍后重试"); return; }
+          var a = document.createElement("a");
+          a.href = durl; a.download = f.name || "附件";
+          document.body.appendChild(a); a.click(); a.remove();
+        });
+      });
+      var del = el("button", "link-btn danger", "删除");
+      del.addEventListener("click", function () {
+        confirmDialog("删除确认", "确定删除该附件吗？", function () {
+          var removed = filesArr.splice(idx, 1)[0];
+          if (removed && removed.storagePath && hasCloudStorage()) {
+            cloud.storage.runtime.remove([removed.storagePath]).catch(function () {});
+          }
+          removeBackupEntry(uploadDir, removed);
+          if (onChanged) onChanged();
+          rebuild();
+          toast("附件已删除");
+        });
+      });
+      acts.appendChild(dl); acts.appendChild(del);
+      row.appendChild(icon); row.appendChild(info); row.appendChild(acts);
+      return row;
+    }
+    function rebuild() {
+      listWrap.innerHTML = "";
+      if (!filesArr.length) {
+        listWrap.appendChild(el("div", "file-empty", "暂无附件，点击下方按钮上传"));
+        return;
+      }
+      filesArr.forEach(function (f, idx) { listWrap.appendChild(fileRow(f, idx)); });
+    }
+    rebuild();
+    body.appendChild(listWrap);
+
+    var fInput = document.createElement("input");
+    fInput.type = "file"; fInput.multiple = true; fInput.style.display = "none";
+    fInput.addEventListener("change", function () {
+      readFiles(fInput, uploadDir, function (arr) {
+        arr.forEach(function (f) { filesArr.push(f); if (onAdd) onAdd(f); });
+        if (onChanged) onChanged();
+        rebuild();
+        toast("已添加 " + arr.length + " 个附件");
+        fInput.value = "";
+      });
+    });
+    body.appendChild(fInput);
+
+    var foot = el("div");
+    var addBtn = el("button", "btn btn-primary", "＋ 添加附件");
+    addBtn.addEventListener("click", function () { fInput.click(); });
+    foot.appendChild(addBtn);
+    var closeBtn = el("button", "btn btn-ghost", "关闭");
+    closeBtn.addEventListener("click", function () { closeModal(); if (afterClose) afterClose(); });
+    foot.appendChild(closeBtn);
+
+    openModal(title, body, foot);
+    if (afterClose) {
+      var refreshOnce = function () { setTimeout(afterClose, 0); };
+      $("modalOverlay").addEventListener("click", refreshOnce, { once: true });
+      $("modal").querySelector(".modal-close").addEventListener("click", refreshOnce, { once: true });
+    }
+  }
+  function openScheduleFiles(d) {
+    if (!Array.isArray(d.scheduleFiles)) d.scheduleFiles = [];
+    openFileManager("排期报价表", d.scheduleFiles, saveDemands, renderDispatch, "需求：" + (d.name || "") + " · 点击「预览」可在线查看，无需下载", null, "demands/" + d.id);
+  }
+
+  /* ================= 合同正文识别（甲方/乙方） ================= */
+  function decodeTextBytes(u8) {
+    var s = new TextDecoder("utf-8").decode(u8);
+    if (s.indexOf("\uFFFD") >= 0) {
+      try { s = new TextDecoder("gbk").decode(u8); } catch (e) { }
+    }
+    return s;
+  }
+  function cleanPartyCandidate(s) {
+    s = String(s || "").replace(/\r/g, "");
+    // OCR 常把（）识别为【】或【)：统一归一化
+    s = s.replace(/[【\[]/g, "（").replace(/[】\]]/g, "）").replace(/\)/g, "）");
+    s = s.replace(/^[：:\s\u3000]+/, "");
+    // 截断到下一个"甲方：/乙方（xx）："出现处（PDF 文本行合并时会连在一起）
+    s = s.split(/[甲乙]方(?:[（(][^）)\n:：]{0,10}[）)])?[：:]/)[0];
+    s = s.replace(/(?:地址|住所|统一社会信用代码|法定代表人|联系人|联系电话|电话|开户行|银行账号|账号|签订日期|签署日期|签订地点|邮编|传真|邮箱).*$/, "");
+    s = s.replace(/[（(]?以下简称[“"'‘’]?[甲乙]方[”"']?[）)]?.*$/, "");
+    s = s.replace(/[（(][^（）()]*[）)]\s*$/g, function (full) {
+      var inner = full.slice(1, -1);
+      if (/甲|乙|委托|受托|采购|需求|买方|卖方|供方|需方|盖章|公章|签字|签署|日期|章/.test(inner)) return "";
+      return full;
+    });
+    s = s.replace(/[，,。;；、\s]+$/, "");
+    s = s.replace(/^[为是系]+/, "");
+    if (s.length > 40) s = s.slice(0, 40);
+    return s.trim();
+  }
+  function extractParty(text, label) {
+    if (!text) return "";
+    var t = String(text).replace(/\r/g, "");
+    var re, m, r;
+    // 1) 甲方（委托方/全称）：名称
+    re = new RegExp(label + "[（(][^）)\\n:：]{0,8}[）)]?[：:]\\s*([^\\n，,。;；]{2,60})");
+    m = t.match(re);
+    if (m) { r = cleanPartyCandidate(m[1]); if (r && r !== label) return r; }
+    // 2) 甲方：名称 / 甲方，名称（OCR 常把冒号识别为逗号；名称可换行）
+    re = new RegExp(label + "[：:，,]\\s*([^\\n]{1,60}?)(?=[，,。;；\\n]|$)", "g");
+    m = t.match(re);
+    if (m) { r = cleanPartyCandidate(m[0].replace(new RegExp("^" + label + "[：:，,]\\s*"), "")); if (r && r !== label) return r; }
+    // 3) 名称（以下简称"甲方"）
+    re = new RegExp("([^\\n，,。;；]{2,60}?)[（(]\\s*以下简称\\s*[“\"']?" + label);
+    m = t.match(re);
+    if (m) { r = cleanPartyCandidate(m[1]); if (r && r !== label) return r; }
+    // 4) 甲方为/系 名称
+    re = new RegExp(label + "\\s*[为系]\\s*([^\\n，,。;；]{2,40}(?:公司|工作室|团队|中心|事务所|研究院|集团|厂|店|社))");
+    m = t.match(re);
+    if (m) { r = cleanPartyCandidate(m[1]); if (r && r !== label) return r; }
+    return "";
+  }
+  // docx：最小 zip 解析 + DecompressionStream 解压 word/document.xml
+  function docxText(u8) {
+    return new Promise(function (resolve) {
+      try {
+        var dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+        var eocd = -1;
+        for (var i = u8.length - 22; i >= 0; i--) {
+          if (u8[i] === 0x50 && u8[i + 1] === 0x4b && u8[i + 2] === 0x05 && u8[i + 3] === 0x06) { eocd = i; break; }
+        }
+        if (eocd < 0) { resolve(""); return; }
+        var total = dv.getUint16(eocd + 10, true);
+        var cdSize = dv.getUint32(eocd + 12, true);
+        var cdOffset = dv.getUint32(eocd + 16, true);
+        var dec = new TextDecoder("utf-8");
+        var p = cdOffset;
+        var end = Math.min(cdOffset + cdSize, u8.length);
+        var entry = null;
+        for (var e = 0; e < total && p + 46 <= end; e++) {
+          if (dv.getUint32(p, true) !== 0x02014b50) break;
+          var method = dv.getUint16(p + 10, true);
+          var compSize = dv.getUint32(p + 20, true);
+          var nameLen = dv.getUint16(p + 28, true);
+          var extraLen = dv.getUint16(p + 30, true);
+          var commentLen = dv.getUint16(p + 32, true);
+          var lho = dv.getUint32(p + 42, true);
+          var name = dec.decode(u8.subarray(p + 46, p + 46 + nameLen));
+          if (name === "word/document.xml") {
+            var lp = lho;
+            var lNameLen = dv.getUint16(lp + 26, true);
+            var lExtraLen = dv.getUint16(lp + 28, true);
+            var ds = lp + 30 + lNameLen + lExtraLen;
+            entry = { method: method, comp: u8.subarray(ds, ds + compSize) };
+            break;
+          }
+          p += 46 + nameLen + extraLen + commentLen;
+        }
+        if (!entry) { resolve(""); return; }
+        function parseXml(buf) {
+          var xml = new TextDecoder("utf-8").decode(new Uint8Array(buf));
+          xml = xml.replace(/<w:p[ >]/g, "\n").replace(/<w:br\/>/g, "\n").replace(/<w:tab\/>/g, " ");
+          xml = xml.replace(/<[^>]+>/g, "");
+          var d = document.createElement("textarea");
+          d.innerHTML = xml;
+          return d.value;
+        }
+        if (entry.method === 0) {
+          resolve(parseXml(entry.comp.buffer.slice(entry.comp.byteOffset, entry.comp.byteOffset + entry.comp.byteLength)));
+        } else if (entry.method === 8) {
+          try {
+            var dsStream = new Blob([entry.comp]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+            new Response(dsStream).arrayBuffer().then(function (buf) { resolve(parseXml(buf)); }).catch(function () { resolve(""); });
+          } catch (e2) { resolve(""); }
+        } else { resolve(""); }
+      } catch (e) { resolve(""); }
+    });
+  }
+  // pdf：pdfjs 提取前 20 页文本（扫描件无文字层时返回空）
+  function pdfText(u8) {
+    return new Promise(function (resolve) {
+      if (!window.pdfjsLib) { resolve(""); return; }
+      try {
+        if (!window.__pdfWorkerSet) {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = "js/vendor/pdf.worker.min.js";
+          window.__pdfWorkerSet = true;
+        }
+        pdfjsLib.getDocument({ data: u8 }).promise.then(function (pdf) {
+          var max = Math.min(pdf.numPages, 20);
+          var pages = [];
+          var i = 1;
+          function next() {
+            if (i > max) { var joined = pages.join("\n"); resolve(joined.trim() ? joined : ""); return; }
+            pdf.getPage(i).then(function (page) {
+              return page.getTextContent();
+            }).then(function (tc) {
+              pages.push(tc.items.map(function (it) { return it.str; }).join(" "));
+              i++;
+              next();
+            }).catch(function () { var joined = pages.join("\n"); resolve(joined.trim() ? joined : ""); });
+          }
+          next();
+        }).catch(function () { resolve(""); });
+      } catch (e) { resolve(""); }
+    });
+  }
+  // OCR 文本预处理：汉字间空格紧凑化（OCR 逐字带空格）；【】→（）归一化（OCR 常把（）识别为【】）
+  function ocrCompact(t) {
+    var s = String(t || "");
+    // OCR 逐字输出常带字间空格：用环视一次删除（普通 /g 配对替换会因相邻配对交替漏删）
+    s = s.replace(/([\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])/g, "$1");
+    // 汉字与常见标点之间的空格（OCR 常写「开户 行 ，」「名 : 」）
+    s = s.replace(/([\u4e00-\u9fff])\s+([,，。;；、：:！？])/g, "$1$2");
+    // 括号归一化（【】→（））+ 括号紧邻的空格
+    s = s.replace(/[【\[]/g, "（").replace(/[】\]]/g, "）");
+    s = s.replace(/([\u4e00-\u9fff])\s+([（(])/g, "$1$2");
+    s = s.replace(/([）)])\s+([\u4e00-\u9fff])/g, "$1$2");
+    s = s.replace(/([（(])\s+/g, "$1").replace(/\s+([）)])/g, "$1");
+    return s;
+  }
+  // 扫描件 PDF OCR：逐页渲染为图片后识别（中文），复用同一个 worker，超时兜底
+  function ocrPdfText(u8) {
+    return new Promise(function (resolve) {
+      if (!window.pdfjsLib || !window.Tesseract) { resolve(""); return; }
+      var done = false;
+      var timer = setTimeout(function () { if (!done) { done = true; resolve(""); } }, 180000);
+      function fin(t) { if (!done) { done = true; clearTimeout(timer); resolve(t); } }
+      try {
+        if (!window.__pdfWorkerSet) {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = "js/vendor/pdf.worker.min.js";
+          window.__pdfWorkerSet = true;
+        }
+        var pdfDoc = null;
+        var getWorker = window.__ocrWorker
+          ? Promise.resolve(window.__ocrWorker)
+          : window.Tesseract.createWorker("chi_sim", 1, {
+              workerPath: "js/vendor/ocr/worker.min.js",
+              corePath: "js/vendor/ocr/tesseract-core-simd-lstm.wasm.js",
+              langPath: "js/vendor/ocr/lang",
+              logger: function () {}
+            }).then(function (w) { window.__ocrWorker = w; return w; });
+        pdfjsLib.getDocument({ data: u8 }).promise.then(function (pdf) {
+          pdfDoc = pdf;
+          return getWorker;
+        }).then(function (worker) {
+          var max = Math.min(pdfDoc.numPages, 20);
+          var pages = [];
+          var i = 1;
+          function next() {
+            if (done) return;
+            if (i > max) {
+              var joined = pages.join("\n");
+              fin(joined.trim() ? joined : "");
+              return;
+            }
+            var page = null;
+            pdfDoc.getPage(i).then(function (p) {
+              page = p;
+              var vp = p.getViewport({ scale: 2 });
+              var canvas = document.createElement("canvas");
+              canvas.width = Math.floor(vp.width);
+              canvas.height = Math.floor(vp.height);
+              var ctx = canvas.getContext("2d");
+              return p.render({ canvasContext: ctx, viewport: vp }).promise.then(function () { return canvas; });
+            }).then(function (canvas) {
+              return worker.recognize(canvas, {}, { text: true }).then(function (r) {
+                pages.push((r.data && r.data.text) || "");
+                i++;
+                next();
+              });
+            }).catch(function () {
+              i++;
+              next();
+            });
+          }
+          next();
+        }).catch(function () { fin(""); });
+      } catch (e) { fin(""); }
+    });
+  }
+  // 合同日期：一个四位年份日期（2026年1月5日 / 2026-01-05 / 2026/1/5 / 2026.1.5）
+  var CONTRACT_DATE_RE = "(\\d{4}\\s*[年\\-/.．]\\s*\\d{1,2}\\s*[月\\-/.．]\\s*\\d{1,2}\\s*日?)";
+  function normContractDate(s) {
+    var t = normalizeCellText(s).replace(/日$/, "");
+    return parseDateValue(t);
+  }
+  function extractContractDates(text) {
+    var out = { startDate: "", endDate: "" };
+    if (!text) return out;
+    var t = String(text).replace(/\r/g, "").replace(/\u3000/g, " ");
+    // PDF 逐字提取字间空白紧凑化：日期标签
+    var LOOSE_DTAGS = ["合作开始日期", "合作结束日期", "合同开始日期", "合同结束日期", "服务开始日期", "服务结束日期", "项目开始日期", "项目结束日期", "履行起始日", "履行截止日", "开始日期", "开始时间", "生效日期", "生效时间", "起始日期", "启动日期", "结束日期", "结束时间", "终止日期", "到期日期", "截止日期", "届满日期", "失效日期"];
+    LOOSE_DTAGS.sort(function (a, b) { return b.length - a.length; });
+    LOOSE_DTAGS.forEach(function (tag) {
+      t = t.replace(new RegExp(tag.split("").join("\\s*"), "g"), tag);
+    });
+    // 日期标签后换行合并到同一行（docx 表格「开始日期\n2026年3月1日」）
+    var DTAG_RE = "(?:合作开始日期|合作结束日期|合同开始日期|合同结束日期|服务开始日期|服务结束日期|项目开始日期|项目结束日期|履行起始日|履行截止日|开始日期|开始时间|生效日期|生效时间|起始日期|启动日期|结束日期|结束时间|终止日期|到期日期|截止日期|届满日期|失效日期)";
+    t = t.replace(new RegExp("(" + DTAG_RE + ")[：:，, \\t]*\\n(?:[ \\t]*\\n)?[ \\t]*", "g"), "$1：");
+    // 保密/竞业上下文排除：保密期限等不是合同周期
+    function secretNear(idx) {
+      var win = t.slice(Math.max(0, idx - 80), idx);
+      return /保密|竞业/.test(win);
+    }
+    function setOnce(k, v, idx) {
+      if (idx != null && secretNear(idx)) return;
+      var d = normContractDate(v);
+      if (d && !out[k]) out[k] = d;
+    }
+    var D = CONTRACT_DATE_RE;
+    var m;
+    // 1) 显式字段行：开始日期：X / 结束日期：Y
+    var sRe = new RegExp("(?:合同|合作|服务|项目)?(?:开始日期|开始时间|生效日期|生效时间|起始日期|启动日期|履行起始日)[：:]\\s*" + D, "g");
+    while ((m = sRe.exec(t))) setOnce("startDate", m[1], m.index);
+    var eRe = new RegExp("(?:合同|合作|服务|项目)?(?:结束日期|结束时间|终止日期|到期日期|截止日期|届满日期|失效日期|履行截止日)[：:]\\s*" + D, "g");
+    while ((m = eRe.exec(t))) setOnce("endDate", m[1], m.index);
+    if (out.startDate && out.endDate) return out;
+    // 2) 期限标签区间：合同期限/合作期限/合作周期/有效期：2026年3月1日至2026年12月31日（或 起…止）
+    var pRe = new RegExp("(?:合同期限|合作期限|合作周期|合同周期|合同有效期|合作有效期|有效期|服务期限|合作时间|服务时间|合同期|期限|履行期)[：:，,为\\s]*" + D + "[^\\n]{0,24}?(?:至|到|—|–|~|－|-)\\s*" + D, "g");
+    while ((m = pRe.exec(t))) { setOnce("startDate", m[1], m.index); setOnce("endDate", m[2], m.index); }
+    if (out.startDate && out.endDate) return out;
+    // 3) 区间模式：自 X 起至 Y 止 / X 起至 Y（含无"自/从"开头）
+    var qRe = new RegExp("(?:自|从)?\\s*" + D + "[^\\n]{0,24}?[\\s，,]*(?:起)?[\\s，,]*(?:至|到|—|–|~|－|-)\\s*" + D + "[^\\n]{0,6}?(?:止|为止|结束)?", "g");
+    while ((m = qRe.exec(t))) { setOnce("startDate", m[1], m.index); setOnce("endDate", m[2], m.index); }
+    if (out.startDate || out.endDate) return out;
+    // 4) 宽松区间：X 至 Y / X—Y（同一句内两个日期相邻）
+    var lRe = new RegExp(D + "\\s*(?:至|到|—|–|~|－|-)\\s*" + D, "g");
+    while ((m = lRe.exec(t))) { setOnce("startDate", m[1], m.index); setOnce("endDate", m[2], m.index); }
+    return out;
+  }
+  /* 合同收款信息识别（收款人全称/开户行/银行账号） */
+  var BANK_TAG_RE = "(?:收款人全称|收款人名称|收款单位名称|收款单位|收款方名称|收款方|账户名称|账户名|单位名称|公司名称|开户名称|开户名|开户户名|户名|开户银行|开户行|开户支行|收款银行|银行名称|银行账号|银行帐号|收款账号|收款账户|收款帐号|开户账号|打款账号|账户号|银行卡号|账号|帐号|卡号)";
+  function cutBankValue(s) {
+    var parts = String(s || "").split(new RegExp(BANK_TAG_RE + "[：:，,]?"));
+    var v = parts[0] || "";
+    v = v.replace(/^[：:，,\s]+/, "");
+    v = v.replace(/[，,。;；、\s]+$/, "");
+    return v.trim();
+  }
+  function goodPayeeName(s) {
+    if (!s || s.length < 2 || s.length > 50) return "";
+    if (/^[、，,。;；:：\s]/.test(s)) return "";
+    if (/(全称|名称|开户|账号|帐号|户名|卡号|地址|电话|联系人|税号|邮箱|邮编|对接|反馈|项目代号|代号|方式|Information)/.test(s)) return "";
+    return s;
+  }
+  // 银行简称开头：工行/建行/农行/中国工商银行…（含"银行/支行/分行"等字样时直接通过）
+  var BANK_SHORT_PREFIX_RE = "^(?:中国|工商|农业|建设|交通|招商|邮储|中信|光大|民生|兴业|浦发|广发|华夏|平安|工行|农行|建行|交行|招行)";
+  function goodBankName(s) {
+    if (!s || s.length < 2 || s.length > 60) return "";
+    if (/(账号|帐号|户名|全称|地址|电话|联系人)/.test(s)) return "";
+    if (/(银行|信用社|支行|分行|营业部|储蓄所)/.test(s)) return s;
+    if (new RegExp(BANK_SHORT_PREFIX_RE).test(s)) return s;
+    return "";
+  }
+  function cleanAccountValue(s) {
+    var digits = String(s || "").replace(/[^0-9]/g, "");
+    return (digits.length >= 6 && digits.length <= 32) ? digits : "";
+  }
+  // 账号统一清洗：优先保留字母数字（兼容 IBAN），否则退回纯数字清洗
+  function cleanAccountAny(s) {
+    var v = String(s || "").replace(/[\s\-·.]/g, "").toUpperCase();
+    if (/^[A-Z0-9]{6,34}$/.test(v) && /[0-9]/.test(v)) return v;
+    return cleanAccountValue(s);
+  }
+  // 海外合同：SWIFT/BIC 校验（8 或 11 位字母数字，至少含一个字母）
+  function goodSwiftCode(s) {
+    var v = String(s || "").replace(/[\s\-]/g, "").toUpperCase();
+    if (!/^[A-Z0-9]{8,11}$/.test(v) || !/[A-Z]/.test(v)) return "";
+    return v;
+  }
+  // 海外合同：英文银行名（含字母、非纯数字、不含账号/收款人字样）
+  function goodEnglishBankName(s) {
+    var v = String(s || "").replace(/^[：:，,\s]+/, "").replace(/[，,。;；、\s]+$/, "").trim();
+    if (!v || v.length < 2 || v.length > 60) return "";
+    if (!/[A-Za-z]/.test(v)) return "";
+    if (/(账号|帐号|Account|Beneficiary|Swift|SWIFT|BIC)/i.test(v)) return "";
+    return v;
+  }
+  /* 定位收款账户信息段落：先用紧凑文本（去全部空白）匹配标题——PDF 逐字提取带空格/换行也能命中，再映射回原文取段 */
+  function findBankSegment(t) {
+    var compact = t.replace(/\s+/g, "");
+    // 只认收款/付款类标题，绝不认「甲方收款账户信息」（收款人一定是乙方）
+    var pats = [
+      "乙方收款账户信息", "乙方收款账号信息", "乙方收款信息", "乙方账户信息",
+      "收款账户信息", "收款账号信息", "收款账户", "收款信息",
+      "付款方式", "付款信息", "付款账户信息", "收款方式", "账户信息",
+      "Beneficiary Bank Information", "Beneficiary Bank Info", "Beneficiary Information",
+      "Bank Details", "Banking Details", "Payment Details", "Payment Information"
+    ];
+    var pos = -1;
+    for (var i = 0; i < pats.length && pos < 0; i++) {
+      var from = 0, idx;
+      while ((idx = compact.indexOf(pats[i], from)) >= 0) {
+        // 宽泛标题若前 4 字符内含"甲方"则跳过该命中（防定位到"甲方收款/账户信息"段）
+        if (compact.slice(Math.max(0, idx - 4), idx).indexOf("甲方") >= 0) { from = idx + 1; continue; }
+        pos = idx; break;
+      }
+    }
+    if (pos < 0) return "";
+    // 紧凑索引映射回原文（第 pos 个非空白字符）
+    var orig = 0, c = 0;
+    while (orig < t.length && c < pos) {
+      if (/\s/.test(t[orig])) { orig++; continue; }
+      orig++; c++;
+    }
+    var seg = t.slice(orig, orig + 1500);
+    var cut = seg.search(/(?:盖章|签字|签署|签章|以下无正文|此页无正文|（此页无正文)/);
+    if (cut > 0) seg = seg.slice(0, cut);
+    var cut2 = seg.search(/\n\s*(?:第\s*[一二三四五六七八九十百0-9]+\s*[条章]|[一二三四五六七八九十]+\s*[、.．])/);
+    if (cut2 > 0) seg = seg.slice(0, cut2);
+    return seg;
+  }
+  /* 指定文本范围内提取收款三字段；所有命中须归属乙方侧（标签前最近主体标记不是甲方）；excludeNames 与甲方名一致的收款人被拒绝 */
+  function extractBankFromText(t, inSegment, excludeNames) {
+    var out = { payeeName: "", bankName: "", bankAccount: "", swiftCode: "" };
+    if (!t) return out;
+    var m, i;
+    // 归属判断：该位置之前最近的主体标记是甲方还是乙方（无标记返回""）
+    function partyBefore(idx) {
+      var before = t.slice(0, idx);
+      var bYi = before.lastIndexOf("乙方"), bJia = before.lastIndexOf("甲方");
+      if (bYi < 0 && bJia < 0) return "";
+      return bYi > bJia ? "乙" : "甲";
+    }
+    // 与甲方签约主体同名/包含的收款人值拒绝（收款人不可能是甲方）
+    function isExcluded(v) {
+      if (!excludeNames || !v) return false;
+      for (var i2 = 0; i2 < excludeNames.length; i2++) {
+        var n = excludeNames[i2];
+        if (n && n.length >= 4 && (v.indexOf(n) >= 0 || n.indexOf(v) >= 0)) return true;
+      }
+      return false;
+    }
+    // 强标签优先（账户名=收款人全称），弱标签（单位名称/公司名称/收款方）最后兜底，避免命中表头
+    var payeeTags = ["收款人全称", "收款人名称", "账户名", "账户名称", "开户名称", "开户名", "开户户名", "户名", "收款单位名称", "收款单位", "收款方名称", "收款方", "单位名称", "公司名称", "收款人"];
+    for (i = 0; i < payeeTags.length && !out.payeeName; i++) {
+      var pRe = new RegExp(payeeTags[i] + "[：:，,\\s]*([^\\n，,。;；、]{2,60})", "g");
+      while ((m = pRe.exec(t))) {
+        if (partyBefore(m.index) === "甲") continue; // 甲方信息块：跳过
+        var pv = goodPayeeName(cutBankValue(m[1]));
+        if (!pv || isExcluded(pv)) continue;
+        out.payeeName = pv;
+        break;
+      }
+    }
+    var bankTags = ["开户银行", "开户行", "开户支行", "收款银行", "银行名称"];
+    var bankRaw = "";
+    for (i = 0; i < bankTags.length && !out.bankName; i++) {
+      var bRe = new RegExp(bankTags[i] + "[：:，,\\s]*([^\\n，,。;；、]{2,60})", "g");
+      while ((m = bRe.exec(t))) {
+        if (partyBefore(m.index) === "甲") continue; // 甲方开户行：跳过
+        var bv = cutBankValue(m[1]);
+        if (!bankRaw) bankRaw = bv;
+        var gb = goodBankName(bv);
+        if (gb) { out.bankName = gb; break; }
+      }
+    }
+    // 标签写反纠正：开户行值像公司名、账户名值像银行名时交换（合同常见笔误）
+    if (!out.bankName && bankRaw && out.payeeName && goodPayeeName(bankRaw) && goodBankName(out.payeeName) && !isExcluded(bankRaw)) {
+      out.bankName = out.payeeName;
+      out.payeeName = goodPayeeName(bankRaw);
+    }
+    var accRe = new RegExp("(" + BANK_TAG_RE + ")[：:，,\\s]*([0-9][0-9\\s\\-·.]{4,45})", "g");
+    while ((m = accRe.exec(t))) {
+      if (partyBefore(m.index) === "甲") continue; // 甲方账号：跳过
+      var tag = m[1], val = cleanAccountValue(m[2]);
+      if (!val) continue;
+      if (!inSegment && /^(账号|帐号|卡号)$/.test(tag)) {
+        // 裸标签防误判：前文 40 字符含银行/收款/开户/账户关键词，或本段已提取到收款人/开户行（同一收款信息块内）
+        var win = t.slice(Math.max(0, m.index - 40), m.index);
+        if (!/(银行|收款|开户|账户)/.test(win) && !out.payeeName && !out.bankName) continue;
+      }
+      out.bankAccount = val;
+      break;
+    }
+    // —— 海外合同英文标签识别：Beneficiary Name / Account Number / Bank Name / Swift Code ——
+    var engPayeeRe = /(Beneficiary\s+Name|Beneficiary['’]s\s+Name|Beneficiary(?!\s*(?:Bank|Information|Details|Account|Address|Company|Name)))[：:，,\s]*([^\n，,。;；、]{2,80})/gi;
+    while (!out.payeeName && (m = engPayeeRe.exec(t))) {
+      var epv = goodPayeeName(m[2].replace(/^[：:，,\s]+/, "").replace(/[，,。;；、\s]+$/, ""));
+      if (epv && !isExcluded(epv)) out.payeeName = epv;
+    }
+    var engBankRe = /(Beneficiary\s+Bank|Bank\s+Name)[：:，,\s]*([^\n，,。;；、]{2,80})/gi;
+    while (!out.bankName && (m = engBankRe.exec(t))) {
+      var ebv = goodEnglishBankName(m[2]);
+      if (ebv) out.bankName = ebv;
+    }
+    var engAccRe = /(Account\s+Number|Account\s+No\.?|Account\s*#|IBAN|Account)[：:，,\s]*([A-Za-z0-9][A-Za-z0-9 \t\-·.]{4,45})/gi;
+    while (!out.bankAccount && (m = engAccRe.exec(t))) {
+      var eav = String(m[2]).replace(/[\s\-·.]/g, "").toUpperCase();
+      if (/^[A-Z0-9]{6,34}$/.test(eav) && /[0-9]/.test(eav)) out.bankAccount = eav;
+    }
+    var engSwiftRe = /(Swift\s*Code|SWIFT\s*Code|SWIFT|BIC\s*Code|BIC)[：:，,\s]*([A-Za-z0-9][A-Za-z0-9 \t\-]{4,20})/gi;
+    while (!out.swiftCode && (m = engSwiftRe.exec(t))) {
+      var esv = goodSwiftCode(m[2]);
+      if (esv) out.swiftCode = esv;
+    }
+    return out;
+  }
+  function extractBankInfo(text, excludeNames) {
+    var out = { payeeName: "", bankName: "", bankAccount: "", swiftCode: "" };
+    if (!text) return out;
+    var t = String(text).replace(/\r/g, "").replace(/\u3000/g, " ");
+    // 繁体/异体字归一化：帐(U+5E10)/帳(U+5E33)/賬(U+8CAC)→账；戸/戶→户（合同常见"帐号/帐户名"写法）
+    t = t.replace(/[\u5E10\u5E33\u8CAC]/g, "账").replace(/[\u6236\u6237\u6238]/g, "户");
+    // 标签字间空白紧凑化（PDF 逐字提取「账 户 名」→「账户名」），长标签优先防子串冲突
+    var LOOSE_TAGS = ["收款人全称", "收款人名称", "收款单位名称", "收款单位", "收款方名称", "收款方", "账户名称", "账户名", "单位名称", "公司名称", "开户名称", "开户名", "开户户名", "户名", "开户银行", "开户行", "开户支行", "收款银行", "银行名称", "银行账号", "银行帐号", "收款账号", "收款账户", "收款帐号", "开户账号", "打款账号", "账户号", "银行卡号", "账号", "帐号", "卡号", "收款人"];
+    LOOSE_TAGS.sort(function (a, b) { return b.length - a.length; });
+    LOOSE_TAGS.forEach(function (tag) {
+      t = t.replace(new RegExp(tag.split("").join("\\s*"), "g"), tag);
+    });
+    // 标签后换行（含"标签：\n值"、"标签\n值"、docx 表格"标签\n(空行)\n值"）合并到同一行
+    t = t.replace(new RegExp("(" + BANK_TAG_RE + ")[：: \\t\\u3000]*\\n(?:[ \\t\\u3000]*\\n)?[ \\t\\u3000]*", "g"), "$1：");
+    // 找到收款/付款段落标题时，优先只用该段落提取（三字段在一起）；段落提取为空时继续兜底
+    var seg = findBankSegment(t);
+    if (seg) {
+      var r = extractBankFromText(seg, true, excludeNames);
+      if (r.payeeName || r.bankName || r.bankAccount) return r;
+    }
+    // 无段落标题/段落提取空：找「开户行」聚集块（±300 字符内含账号），并要求块归属乙方侧（防甲方主体信息块）
+    var kbRe = /开户行|开户银行|开户支行|收款银行/g;
+    var m2;
+    while ((m2 = kbRe.exec(t))) {
+      // 归属判断：看开户行位置之前最近的主体标记是乙方还是甲方
+      var before = t.slice(0, m2.index);
+      var bYi = before.lastIndexOf("乙方"), bJia = before.lastIndexOf("甲方");
+      if (bJia > bYi) continue; // 甲方侧信息块：跳过
+      // 乙方侧（或无主体标记）：从最近的"乙方"之后取聚集块，排除甲方主体字段
+      var from = Math.max(bYi >= 0 ? bYi + 2 : 0, m2.index - 300), to = m2.index + 300;
+      var p = extractBankFromText(t.slice(from, to), true, excludeNames);
+      if (!p.bankAccount) continue; // 没有账号佐证不采信（防表头）
+      return p;
+    }
+    // 最后全文兜底（提取函数内已有乙方归属检查与甲方名排除）
+    return extractBankFromText(t, false, excludeNames);
+  }
+  /* 合同文档含多份协议时（如 保密协议 + 外包制作框架合作），聚焦"外包制作框架合作"标题之后的正文 */
+  function focusFrame(text) {
+    var s = String(text || "");
+    var m, best = -1;
+    // 1) 优先独立成行的标题（行内主体为"外包制作框架(合作)协议/合同"）
+    var lineRe = /^[ \t\u3000]*《?外包(?:制作)?框架(?:合作)?(?:协议|合同)?》?[ \t\u3000]*$/mg;
+    while ((m = lineRe.exec(s))) best = m.index;
+    if (best >= 0) return s.slice(best);
+    // 2) 行内兜底：取"外包制作框架…"最后一次出现（框架合同一般在保密协议之后）
+    var re = /外包(?:制作)?框架(?:合作)?(?:协议|合同)?|合作框架(?:协议|合同)?|制作框架(?:协议|合同)?/g;
+    while ((m = re.exec(s))) best = m.index;
+    if (best > 0) return s.slice(best);
+    // 3) PDF 逐字提取带空格：紧凑文本（去空白）定位"外包制作框架"最后一次出现
+    var compact = s.replace(/\s+/g, "");
+    var ci = compact.lastIndexOf("外包制作框架");
+    if (ci < 0) ci = compact.lastIndexOf("外包框架");
+    if (ci < 0) ci = compact.lastIndexOf("制作框架");
+    if (ci < 0) return s;
+    var orig = 0, c = 0;
+    while (orig < s.length && c < ci) {
+      if (/\s/.test(s[orig])) { orig++; continue; }
+      orig++; c++;
+    }
+    return s.slice(orig);
+  }
+  /* xlsx/csv 表格解析：支持横向表头（表头行+数据行）与纵向（标签 值）两种布局 */
+  function gridCellText(v) {
+    return v == null ? "" : String(v).replace(/[\u5E10\u5E33\u8CAC]/g, "账").replace(/[\u6236\u6237\u6238]/g, "户").trim();
+  }
+  function gridTagKind(cell) {
+    var s = gridCellText(cell).replace(/[：:\s]/g, "");
+    if (/(Swift\s*Code|SWIFT|BIC)/i.test(s)) return "swift";
+    if (/(银行账号|银行帐号|收款账号|收款账户|收款帐号|开户账号|打款账号|账户号|银行卡号|账号|帐号|卡号|Account\s*Number|Account\s*No\.?|IBAN|Bank\s*Account)/i.test(s)) return "acc";
+    if (/(开户行|开户银行|开户支行|收款银行|银行名称|Beneficiary\s*Bank|Beneficiary['’]s\s*Bank|Bank\s*Name|Bank$)/i.test(s)) return "bank";
+    if (/(收款人全称|收款人名称|收款单位|收款方|账户名|账户名称|单位名称|公司名称|户名|开户名|开户名称|Beneficiary\s*Name|Beneficiary['’]s\s*Name)/i.test(s)) return "payee";
+    return "";
+  }
+  function extractBankFromGrid(rows) {
+    var out = { payeeName: "", bankName: "", bankAccount: "", swiftCode: "" };
+    if (!Array.isArray(rows) || !rows.length) return out;
+    // A) 横向表头：一行内出现 >=2 个银行类标签，标签所在列下方数据行取值
+    var labelRow = -1, labelCols = { payee: -1, bank: -1, acc: -1, swift: -1 };
+    for (var r = 0; r < rows.length; r++) {
+      var row = rows[r] || [];
+      var found = { payee: -1, bank: -1, acc: -1, swift: -1 }, cnt = 0;
+      for (var c = 0; c < row.length; c++) {
+        var k = gridTagKind(row[c]);
+        if (k && found[k] < 0) { found[k] = c; cnt++; }
+      }
+      if (cnt >= 2) { labelRow = r; labelCols = found; break; }
+    }
+    if (labelRow >= 0) {
+      for (var rr = labelRow + 1; rr < rows.length && rr < labelRow + 12; rr++) {
+        var drow = rows[rr] || [];
+        if (labelCols.payee >= 0 && !out.payeeName) {
+          var pv = goodPayeeName(gridCellText(drow[labelCols.payee]));
+          if (pv) out.payeeName = pv;
+        }
+        if (labelCols.bank >= 0 && !out.bankName) {
+          var bv = goodBankName(gridCellText(drow[labelCols.bank])) || goodEnglishBankName(gridCellText(drow[labelCols.bank]));
+          if (bv) out.bankName = bv;
+        }
+        if (labelCols.acc >= 0 && !out.bankAccount) {
+          var av = cleanAccountAny(gridCellText(drow[labelCols.acc]));
+          if (av) out.bankAccount = av;
+        }
+        if (labelCols.swift >= 0 && !out.swiftCode) {
+          var sv = goodSwiftCode(gridCellText(drow[labelCols.swift]));
+          if (sv) out.swiftCode = sv;
+        }
+        if (out.payeeName && out.bankName && out.bankAccount) break;
+      }
+      // 横向表头结果仅在"开户行"列提取到有效银行名时采信（银行名特征强，防表头误命中）
+      if (out.bankName && (out.payeeName || out.bankAccount)) return out;
+    }
+    // B) 纵向：某行 = 标签 + 相邻值（强标签优先扫一轮，弱标签兜底一轮）
+    var STRONG_PAYEE_TAG_RE = /(收款人全称|收款人名称|账户名|账户名称|开户名|开户名称|开户户名|户名)/;
+    function scanVertical(strongOnly) {
+      for (var r2 = 0; r2 < rows.length; r2++) {
+        var row2 = (rows[r2] || []).map(gridCellText);
+        for (var c2 = 0; c2 < row2.length; c2++) {
+          var k2 = gridTagKind(row2[c2]);
+          if (!k2) continue;
+          if (k2 === "payee") {
+            var isStrong = STRONG_PAYEE_TAG_RE.test(row2[c2].replace(/[：:\s]/g, ""));
+            if (strongOnly && !isStrong) continue;
+            if (!strongOnly && isStrong) continue; // 强标签轮已处理过
+          }
+          var val = "";
+          for (var c3 = c2 + 1; c3 < row2.length; c3++) {
+            if (gridTagKind(row2[c3])) break;
+            if (row2[c3]) { val = row2[c3]; break; }
+          }
+          if (!val) continue;
+          if (k2 === "payee" && !out.payeeName) { var pv2 = goodPayeeName(val); if (pv2) out.payeeName = pv2; }
+          else if (k2 === "bank" && !out.bankName) { var bv2 = goodBankName(val) || goodEnglishBankName(val); if (bv2) out.bankName = bv2; }
+          else if (k2 === "acc" && !out.bankAccount) { var av2 = cleanAccountAny(val); if (av2) out.bankAccount = av2; }
+          else if (k2 === "swift" && !out.swiftCode) { var sv2 = goodSwiftCode(val); if (sv2) out.swiftCode = sv2; }
+        }
+        if (out.payeeName && out.bankName && out.bankAccount) return true;
+      }
+      return false;
+    }
+    if (!scanVertical(true)) scanVertical(false);
+    return out;
+  }
+  function parseContractFile(f, cb) {
+    var ext = String(f.name || "").toLowerCase().split(".").pop();
+    var b64 = String(f.dataUrl || "").split(",")[1] || "";
+    function go(b64) {
+      parseWithBytes(ext, b64, cb);
+    }
+    if (b64) { go(b64); return; }
+    if (f.storagePath && hasCloudStorage()) {
+      cloud.storage.runtime.download(f.storagePath).then(function (res) {
+        if (res.error || !res.data) { cb(null); return; }
+        var blob = res.data;
+        var r = new FileReader();
+        r.onload = function () {
+          var b2 = String(r.result || "").split(",")[1] || "";
+          go(b2);
+        };
+        r.onerror = function () { cb(null); };
+        r.readAsDataURL(blob);
+      }).catch(function () { cb(null); });
+      return;
+    }
+    cb(null);
+  }
+  function parseWithBytes(ext, b64, cb) {
+    if (!b64) { cb(null); return; }
+    function bytes() {
+      var bin = atob(b64);
+      var arr = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      return arr;
+    }
+    function finish(text, bankOverride) {
+      if (!text) { cb({ noText: true }); return; }
+      // 多协议文档（保密协议+外包制作框架合作）：主体与日期优先取"外包制作框架"标题之后的正文
+      var ft = focusFrame(text);
+      var strict = (ft !== text);
+      var jia = extractParty(ft, "甲方") || extractParty(text, "甲方");
+      var yi = extractParty(ft, "乙方") || extractParty(text, "乙方");
+      // 日期：框架部分优先；不足时全文兜底合并（日期常写在标题之前的合同信息表；内部已排除保密上下文）
+      var dates = extractContractDates(ft);
+      if (strict) {
+        var fullD = extractContractDates(text);
+        if (!dates.startDate) dates.startDate = fullD.startDate;
+        if (!dates.endDate) dates.endDate = fullD.endDate;
+      }
+      // 收款信息：框架部分优先；不足时全文兜底（提取内部已做乙方归属检查与甲方名排除）
+      var exclude = jia ? [jia] : [];
+      var bank = bankOverride || extractBankInfo(ft, exclude);
+      if (strict && (!bank.payeeName || !bank.bankName || !bank.bankAccount || !bank.swiftCode)) {
+        var fullB = extractBankInfo(text, exclude);
+        if (!bank.payeeName) bank.payeeName = fullB.payeeName;
+        if (!bank.bankName) bank.bankName = fullB.bankName;
+        if (!bank.bankAccount) bank.bankAccount = fullB.bankAccount;
+        if (!bank.swiftCode) bank.swiftCode = fullB.swiftCode;
+      }
+      // OCR 扫描件：乙方主体常识别不全（如「郑州数学黎」），而收款段落质量高——收款人全称即乙方账号名称，用它兜底
+      if (bank.payeeName && /(公司|工作室|团队|中心|事务所|研究院|集团|厂|店|社)/.test(bank.payeeName)) {
+        if (!yi || (yi.length <= 12 && !/(公司|工作室|团队|中心|事务所|研究院|集团|厂|店|社)/.test(yi))) {
+          yi = bank.payeeName;
+        }
+      }
+      if (!jia && !yi && !dates.startDate && !dates.endDate && !bank.payeeName && !bank.bankName && !bank.bankAccount && !bank.swiftCode) { cb({ noFields: true }); return; }
+      cb({ ourParty: jia, supplierParty: yi, startDate: dates.startDate, endDate: dates.endDate, payeeName: bank.payeeName, bankName: bank.bankName, bankAccount: bank.bankAccount, swiftCode: bank.swiftCode });
+    }
+    if (["txt", "md", "log"].indexOf(ext) >= 0) {
+      finish(decodeTextBytes(bytes()));
+    } else if (["xlsx", "xls", "csv"].indexOf(ext) >= 0) {
+      try {
+        var wb = XLSX.read(bytes(), { type: "array", codepage: 65001 });
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
+        var text = rows.map(function (r) { return r.join(" "); }).join("\n");
+        var gBank = extractBankFromGrid(rows);
+        var tBank = extractBankInfo(focusFrame(text));
+        finish(text, {
+          payeeName: gBank.payeeName || tBank.payeeName,
+          bankName: gBank.bankName || tBank.bankName,
+          bankAccount: gBank.bankAccount || tBank.bankAccount,
+          swiftCode: gBank.swiftCode || tBank.swiftCode
+        });
+      } catch (e) { cb({ parseFail: true }); }
+    } else if (ext === "docx") {
+      docxText(bytes()).then(finish);
+    } else if (ext === "pdf") {
+      pdfText(bytes()).then(function (text) {
+        if (text) { finish(text); return; }
+        // 扫描件 PDF（无文字层）：用 OCR 识别图片后走同一管线
+        if (window.Tesseract && window.pdfjsLib) {
+          toast("检测到扫描件 PDF，正在 OCR 识别文字（约需 30-60 秒），请稍候…");
+          ocrPdfText(bytes()).then(function (ocrText) {
+            if (!ocrText) { cb({ scanPdf: true }); return; }
+            finish(ocrCompact(ocrText));
+          });
+        } else {
+          cb({ scanPdf: true });
+        }
+      });
+    } else if (["doc", "wps", "pages"].indexOf(ext) >= 0) {
+      cb({ unsupported: ext });
+    } else {
+      cb({ unsupported: ext });
+    }
+  }
+
   function starWidget(val, onChange) {
     var wrap = el("div", "stars");
     var cur = Number(val) || 0;
@@ -1005,7 +2819,7 @@ body[data-theme="dark"] .star { color: #3a4454; }
     grid.appendChild(fieldRow("合作项目", makeCheckboxGroup(config.projects, initial.projects || [], "sp_projects"), false, true));
 
     var introFiles = (initial.introFiles || []).slice();
-    var introField = fieldRow("公司介绍资料", fileField(introFiles, function (f) { introFiles = f; }), false, true);
+    var introField = fieldRow("公司介绍资料", fileField(introFiles, function (f) { introFiles = f; }, "suppliers/" + (initial.id || "new")), false, true);
     grid.appendChild(introField);
 
     grid.appendChild(fieldRow("银行账号", makeInput("text", "bankAccount", initial.bankAccount)));
@@ -1013,7 +2827,7 @@ body[data-theme="dark"] .star { color: #3a4454; }
     grid.appendChild(fieldRow("收款方", makeInput("text", "payee", initial.payee)));
 
     var licFiles = (initial.licenseFiles || []).slice();
-    var licField = fieldRow("营业执照", fileField(licFiles, function (f) { licFiles = f; }), false, true);
+    var licField = fieldRow("营业执照", fileField(licFiles, function (f) { licFiles = f; }, "suppliers/" + (initial.id || "new")), false, true);
     grid.appendChild(licField);
 
     if (!isSelfService) {
@@ -1057,15 +2871,57 @@ body[data-theme="dark"] .star { color: #3a4454; }
     grid.appendChild(fieldRow("数量", makeInput("number", "qty", d ? d.qty : "", "")));
     grid.appendChild(fieldRow("内部工作量", makeInput("text", "workload", d ? d.workload : "", "如：5 人天"), false, true));
 
+    // 排期报价表附件：上传后自动识别开始时间/DDL/报价，识别结果可手动修改
+    var schedFiles = (d && d.scheduleFiles ? d.scheduleFiles : []).slice();
+    var schedLastCount = { v: schedFiles.length };
+    function onSchedFilesChange(filesArr) {
+      schedFiles = filesArr;
+      var added = filesArr.slice(schedLastCount.v);
+      schedLastCount.v = filesArr.length;
+      added.forEach(function (f) {
+        parseScheduleFile(f, function (res) {
+          if (!res || !res.hits.length) {
+            toast("「" + f.name + "」未识别到开始时间/DDL/报价/总人天，请手动填写");
+            return;
+          }
+          if (res.dispatchDate) { var n = grid.querySelector('[data-key="dispatchDate"]'); if (n) n.value = res.dispatchDate; }
+          if (res.ddl) { var n = grid.querySelector('[data-key="ddl"]'); if (n) n.value = res.ddl; }
+          if (res.totalManDays) { var n = grid.querySelector('[data-key="totalManDays"]'); if (n) n.value = res.totalManDays; }
+          if (res.quoteAmount) {
+            var n = grid.querySelector('[data-key="quoteAmount"]'); if (n) n.value = res.quoteAmount;
+            var c = grid.querySelector('[data-key="quoteCurrency"]'); if (c) c.value = res.quoteCurrency || "RMB";
+          }
+          var parts = [];
+          if (res.dispatchDate) parts.push("开始时间 " + res.dispatchDate);
+          if (res.ddl) parts.push("DDL " + res.ddl);
+          if (res.quoteAmount) parts.push("报价 " + res.quoteAmount + " " + (res.quoteCurrency === "USD" ? "USD" : "RMB"));
+          if (res.totalManDays) parts.push("总人天 " + res.totalManDays);
+          toast("已识别：" + parts.join("、") + "，可手动修改");
+        });
+      });
+    }
+
+    if (isCreate) {
+      grid.appendChild(fieldRow("排期报价表（附件）", fileField(schedFiles, onSchedFilesChange, "demands/" + (d ? d.id : "new")), false, true));
+      grid.appendChild(fieldRow("开始时间", makeInput("date", "dispatchDate", "")));
+      grid.appendChild(fieldRow("DDL", makeInput("date", "ddl", "")));
+      var amountField = el("div", "form-field");
+      var amountWrap = el("div"); amountWrap.style.cssText = "display:flex;gap:8px;";
+      amountWrap.appendChild(makeInput("number", "quoteAmount", "", "金额"));
+      amountWrap.appendChild(makeSelect("quoteCurrency", ["RMB", "USD"], "RMB"));
+      amountField.appendChild(el("label", "", "报价")); amountField.appendChild(amountWrap);
+      grid.appendChild(amountField);
+      grid.appendChild(fieldRow("总人天", makeInput("text", "totalManDays", "", "如：15"), false, true, "上传排期报价表可自动识别，可手动修改"));
+    }
+
     if (!isCreate) {
       grid.appendChild(fieldRow("需求状态", makeSelect("status", ["未开始", "进行中", "已完成", "延期"], d.status)));
-      grid.appendChild(fieldRow("发包月份", makeInput("month", "dispatchMonth", d.dispatchMonth)));
-      grid.appendChild(fieldRow("发包时间", makeInput("date", "dispatchDate", d.dispatchDate)));
+      grid.appendChild(fieldRow("发包月份", makeInput("month", "dispatchMonth", d.dispatchMonth), false, true, "默认按创建日期自动生成"));
+      grid.appendChild(fieldRow("开始时间", makeInput("date", "dispatchDate", d.dispatchDate)));
       grid.appendChild(fieldRow("DDL", makeInput("date", "ddl", d.ddl)));
       grid.appendChild(fieldRow("供应商", makeSelect("supplier", suppliers.map(function (s) { return { value: s.id, label: s.name }; }), d.supplierId, "请选择供应商")));
 
-      var schedFiles = (d.scheduleFiles || []).slice();
-      grid.appendChild(fieldRow("排期（附件）", fileField(schedFiles, function (f) { schedFiles = f; }), false, true));
+      grid.appendChild(fieldRow("排期报价表（附件）", fileField(schedFiles, onSchedFilesChange, "demands/" + (d ? d.id : "new")), false, true));
 
       var amountField = el("div", "form-field");
       var amountWrap = el("div"); amountWrap.style.cssText = "display:flex;gap:8px;";
@@ -1073,6 +2929,7 @@ body[data-theme="dark"] .star { color: #3a4454; }
       amountWrap.appendChild(makeSelect("quoteCurrency", ["RMB", "USD"], d.quoteCurrency || "RMB"));
       amountField.appendChild(el("label", "", "报价")); amountField.appendChild(amountWrap);
       grid.appendChild(amountField);
+      grid.appendChild(fieldRow("总人天", makeInput("text", "totalManDays", d.totalManDays || "", "如：15"), false, true, "上传排期报价表可自动识别，可手动修改"));
 
       grid.appendChild(fieldRow("验收时间", makeInput("date", "acceptDate", d.acceptDate)));
       grid.appendChild(fieldRow("测试情况", makeRadio("testResult", ["测试通过", "测试未通过"], d.testResult)));
@@ -1094,15 +2951,22 @@ body[data-theme="dark"] .star { color: #3a4454; }
         project: q("project"),
         module: q("module"),
         qty: q("qty"),
-        workload: q("workload").trim()
+        workload: q("workload").trim(),
+        totalManDays: q("totalManDays").trim(),
+        scheduleFiles: schedFiles
       };
+      if (isCreate) {
+        out.dispatchDate = q("dispatchDate");
+        out.ddl = q("ddl");
+        out.quoteAmount = q("quoteAmount");
+        out.quoteCurrency = q("quoteCurrency") || "RMB";
+      }
       if (!isCreate) {
         out.status = q("status") || "未开始";
         out.dispatchMonth = q("dispatchMonth");
         out.dispatchDate = q("dispatchDate");
         out.ddl = q("ddl");
         out.supplierId = q("supplier");
-        out.scheduleFiles = schedFiles;
         out.quoteAmount = q("quoteAmount");
         out.quoteCurrency = q("quoteCurrency") || "RMB";
         out.acceptDate = q("acceptDate");
@@ -1118,34 +2982,199 @@ body[data-theme="dark"] .star { color: #3a4454; }
   }
 
   /* ================= 合同表单 ================= */
-  function contractForm(c) {
+  function contractForm(c, opts) {
+    opts = opts || {};
+    var isNew = !!opts.isNew;
     var grid = el("div", "form-grid");
-    grid.appendChild(fieldRow("供应商名称", (function () {
+
+    // 供应商：新建时可下拉选择；编辑时锁定显示
+    var supSel = null;
+    if (isNew) {
+      supSel = el("select");
+      supSel.innerHTML = '<option value="">请选择供应商…</option>' + suppliers.map(function (s) {
+        return '<option value="' + s.id + '">' + esc(s.name) + "</option>";
+      }).join("");
+    } else {
       var s = el("input"); s.type = "text"; s.value = supplierName(c.supplierId); s.disabled = true;
-      return s;
-    })()));
-    grid.appendChild(fieldRow("是否签署合同", makeRadio("signed", ["是", "否"], c.signed || "否")));
-    grid.appendChild(fieldRow("供应商签约主体", makeInput("text", "supplierParty", c.supplierParty)));
-    grid.appendChild(fieldRow("我方签约主体", makeInput("text", "ourParty", c.ourParty)));
-    grid.appendChild(fieldRow("合同开始日期", makeInput("date", "startDate", c.startDate)));
-    grid.appendChild(fieldRow("合同结束日期", makeInput("date", "endDate", c.endDate)));
-    function collect() {
-      return {
-        signed: getRadio(grid, "signed"),
-        supplierParty: grid.querySelector('[data-key="supplierParty"]').value.trim(),
-        ourParty: grid.querySelector('[data-key="ourParty"]').value.trim(),
-        startDate: grid.querySelector('[data-key="startDate"]').value,
-        endDate: grid.querySelector('[data-key="endDate"]').value
-      };
     }
-    return { node: grid, collect: collect };
+    grid.appendChild(fieldRow("供应商名称", isNew ? supSel : s, true));
+    grid.appendChild(fieldRow("供应商签约主体", makeInput("text", "supplierParty", c ? c.supplierParty : "")));
+
+    // 我方签约主体：单选 + 可自定义添加选项
+    var ourWrap = el("div", "select-with-add");
+    var ourSel = el("select");
+    var addBox = el("div", "custom-party-box");
+    var addInput = el("input");
+    addInput.type = "text";
+    addInput.placeholder = "输入新的主体名称，如：某某科技有限公司";
+    var addOk = el("button", "btn btn-primary btn-sm", "添加并选中");
+    var addCancel = el("button", "btn btn-ghost btn-sm", "取消");
+    var ourTouched = false; // 用户手动选择过我方主体后，识别结果不再自动覆盖
+    function fillOurSel(selected) {
+      ourSel.innerHTML = '<option value="">请选择我方签约主体…</option>' + config.ourParties.map(function (p) {
+        return '<option value="' + esc(p) + '"' + (p === selected ? " selected" : "") + ">" + esc(p) + "</option>";
+      }).join("") + '<option value="__add__">＋ 添加新主体…</option>';
+    }
+    function hideAddBox() { addBox.hidden = true; addInput.value = ""; }
+    function showAddBox() { addBox.hidden = false; addInput.focus(); }
+    fillOurSel(c ? c.ourParty : "");
+    addBox.hidden = true;
+    ourSel.addEventListener("change", function () {
+      ourTouched = true;
+      if (ourSel.value === "__add__") showAddBox(); else hideAddBox();
+    });
+    addOk.addEventListener("click", function () {
+      var nm = addInput.value.trim();
+      if (!nm) { toast("请输入主体名称"); return; }
+      if (config.ourParties.indexOf(nm) < 0) {
+        config.ourParties.push(nm);
+        saveConfig();
+      }
+      ourTouched = true;
+      fillOurSel(nm);
+      hideAddBox();
+      toast("已添加主体「" + nm + "」，并保存到选项");
+    });
+    addCancel.addEventListener("click", function () {
+      hideAddBox();
+      fillOurSel(c ? c.ourParty : "");
+    });
+    addBox.appendChild(addInput);
+    addBox.appendChild(addOk);
+    addBox.appendChild(addCancel);
+    ourWrap.appendChild(ourSel);
+    ourWrap.appendChild(addBox);
+    grid.appendChild(fieldRow("我方签约主体", ourWrap, true));
+
+    grid.appendChild(fieldRow("收款人全称", makeInput("text", "payeeName", c ? c.payeeName : "", "如：XX科技有限公司")));
+    grid.appendChild(fieldRow("开户行", makeInput("text", "bankName", c ? c.bankName : "", "如：招商银行北京分行")));
+    grid.appendChild(fieldRow("银行账号", makeInput("text", "bankAccount", c ? c.bankAccount : "", "请输入银行账号")));
+    grid.appendChild(fieldRow("SWIFT Code", makeInput("text", "swiftCode", c ? c.swiftCode : "", "海外合同必填（SWIFT/BIC，8 或 11 位），国内合同可留空")));
+    grid.appendChild(fieldRow("合同开始日期", makeInput("date", "startDate", c ? c.startDate : "")));
+    grid.appendChild(fieldRow("合同结束日期", makeInput("date", "endDate", c ? c.endDate : "")));
+
+    // 合同附件：上传后自动识别正文中的甲方（我方主体）/乙方（供应商签约主体）
+    var ctFiles = (c && Array.isArray(c.files)) ? c.files.slice() : [];
+    var lastFileCount = ctFiles.length;
+    function applyContractParse(res, fname) {
+      if (!res) return;
+      if (!grid.isConnected) return; // 表单已关闭，识别结果不再回填
+      if (res.unsupported) {
+        toast("「" + (fname || "附件") + "」为 ." + res.unsupported + " 格式，暂不支持识别。请在 Word/WPS 中另存为 .docx 或 PDF 后重新上传");
+        return;
+      }
+      if (res.parseFail) { toast("「" + (fname || "附件") + "」文件解析失败，请确认文件未损坏后重试"); return; }
+      if (res.noText) { toast("未能从「" + (fname || "附件") + "」中提取到文字（可能是扫描件或图片型文件），请上传含文字层的 docx/PDF"); return; }
+      if (res.scanPdf) { toast("「" + (fname || "附件") + "」是扫描件 PDF，自动识别（OCR）也未能提取到有效内容，请手动填写"); return; }
+      if (res.noFields) { toast("已读取「" + (fname || "附件") + "」正文，但未识别到签约主体、收款信息或合同日期，请确认上传的是合同文件"); return; }
+      var changed = [];
+      var spInput = grid.querySelector('[data-key="supplierParty"]');
+      if (res.supplierParty && spInput && !spInput.value.trim()) {
+        spInput.value = res.supplierParty;
+        changed.push("供应商签约主体（乙方）「" + res.supplierParty + "」");
+      }
+      if (res.ourParty && !ourTouched && (!c || !c.ourParty)) {
+        if (config.ourParties.indexOf(res.ourParty) < 0) {
+          config.ourParties.push(res.ourParty);
+          saveConfig();
+        }
+        fillOurSel(res.ourParty);
+        hideAddBox();
+        ourTouched = true; // 识别填充一次后，不再被后续上传的文件覆盖
+        changed.push("我方签约主体（甲方）「" + res.ourParty + "」");
+      }
+      if (res.startDate) {
+        var sInp = grid.querySelector('[data-key="startDate"]');
+        if (sInp && !sInp.value) { sInp.value = res.startDate; changed.push("开始日期 " + res.startDate); }
+      }
+      if (res.endDate) {
+        var eInp = grid.querySelector('[data-key="endDate"]');
+        if (eInp && !eInp.value) { eInp.value = res.endDate; changed.push("结束日期 " + res.endDate); }
+      }
+      var conflicts = [];
+      if (res.payeeName) {
+        var pInp = grid.querySelector('[data-key="payeeName"]');
+        if (pInp) {
+          if (!pInp.value.trim()) { pInp.value = res.payeeName; changed.push("收款人全称「" + res.payeeName + "」"); }
+          else if (pInp.value.trim() !== res.payeeName) conflicts.push("收款人全称「" + res.payeeName + "」");
+        }
+      }
+      if (res.bankName) {
+        var bInp = grid.querySelector('[data-key="bankName"]');
+        if (bInp) {
+          if (!bInp.value.trim()) { bInp.value = res.bankName; changed.push("开户行「" + res.bankName + "」"); }
+          else if (bInp.value.trim() !== res.bankName) conflicts.push("开户行「" + res.bankName + "」");
+        }
+      }
+      if (res.bankAccount) {
+        var aInp = grid.querySelector('[data-key="bankAccount"]');
+        if (aInp) {
+          if (!aInp.value.trim()) { aInp.value = res.bankAccount; changed.push("银行账号 " + res.bankAccount); }
+          else if (aInp.value.trim() !== res.bankAccount) conflicts.push("银行账号 " + res.bankAccount);
+        }
+      }
+      if (res.swiftCode) {
+        var swInp = grid.querySelector('[data-key="swiftCode"]');
+        if (swInp) {
+          if (!swInp.value.trim()) { swInp.value = res.swiftCode; changed.push("SWIFT Code " + res.swiftCode); }
+          else if (swInp.value.trim() !== res.swiftCode) conflicts.push("SWIFT Code " + res.swiftCode);
+        }
+      }
+      if (changed.length) {
+        var missed = [];
+        if (!res.ourParty) missed.push("我方签约主体");
+        if (!res.supplierParty) missed.push("供应商签约主体");
+        if (!res.startDate) missed.push("开始日期");
+        if (!res.endDate) missed.push("结束日期");
+        if (!res.payeeName) missed.push("收款人全称");
+        if (!res.bankName) missed.push("开户行");
+        if (!res.bankAccount) missed.push("银行账号");
+        var msg = "已从「" + (fname || "附件") + "」识别：" + changed.join("、");
+        if (missed.length) msg += "；未识别到：" + missed.join("、") + "，请手动填写";
+        toast(msg);
+      }
+      else if (conflicts.length) toast("识别到：" + conflicts.join("、") + "，但表单已有值未覆盖，请核对后手动修改");
+    }
+    var pendingParses = 0; // 合同附件识别进行中，防止保存时识别结果未回填
+    function onContractFilesChange(arr) {
+      var added = arr.slice(lastFileCount);
+      lastFileCount = arr.length;
+      ctFiles = arr;
+      added.forEach(function (f) {
+        var isContractLike = /\.(docx?|pdf|xlsx?|xls|csv|txt|md|wps|pages)$/i.test(f.name);
+        if (!isContractLike) return;
+        toast("正在识别「" + f.name + "」…");
+        pendingParses++;
+        parseContractFile(f, function (res) {
+          pendingParses--;
+          applyContractParse(res, f.name);
+        });
+      });
+    }
+    grid.appendChild(fieldRow("合同附件", fileField(ctFiles, onContractFilesChange, "contracts/" + (c && c.id ? c.id : "new")), false, true));
+    function collect() {
+      var out = {
+        supplierParty: grid.querySelector('[data-key="supplierParty"]').value.trim(),
+        ourParty: ourSel.value === "__add__" ? "" : ourSel.value,
+        payeeName: grid.querySelector('[data-key="payeeName"]').value.trim(),
+        bankName: grid.querySelector('[data-key="bankName"]').value.trim(),
+        bankAccount: grid.querySelector('[data-key="bankAccount"]').value.trim(),
+        swiftCode: grid.querySelector('[data-key="swiftCode"]').value.trim(),
+        startDate: grid.querySelector('[data-key="startDate"]').value,
+        endDate: grid.querySelector('[data-key="endDate"]').value,
+        files: ctFiles
+      };
+      if (isNew) out.supplierId = supSel.value;
+      return out;
+    }
+    return { node: grid, collect: collect, pending: function () { return pendingParses; } };
   }
 
   /* ================= 模块过滤状态 ================= */
   var moduleState = {
     suppliers: { search: "", category: "", status: "", type: "" },
     dispatch: { search: "", project: "", module: "", supplier: "", attr: "", status: "", sort: "createdAt", order: "desc", group: false },
-    contracts: { search: "", supplier: "", signed: "" },
+    contracts: { search: "", supplier: "", flow: "" },
     settlement: { search: "", supplier: "", project: "", status: "", from: "", to: "" }
   };
 
@@ -1262,6 +3291,37 @@ body[data-theme="dark"] .star { color: #3a4454; }
     btnLink.addEventListener("click", showOnboardLink);
     c.appendChild(pageHead("供应商库", "管理所有入库供应商及其资质、合作状态", [btnAdd, btnLink]));
 
+    // 待审核入库申请
+    if (onboardApps.length) {
+      var pend = el("div", "pending-box");
+      var pendHead = el("div", "pending-head");
+      pendHead.appendChild(el("span", "pending-title", "📥 待审核入库申请（" + onboardApps.length + "）"));
+      if (isAdmin()) pendHead.appendChild(el("span", "muted", "供应商通过自助链接提交，审核后进入供应商库"));
+      pend.appendChild(pendHead);
+      onboardApps.forEach(function (app) {
+        var row = el("div", "pending-row");
+        var info = el("div", "pending-info");
+        info.appendChild(el("b", "", esc((app.data && app.data.name) || "未命名供应商")));
+        info.appendChild(el("span", "muted",
+          (app.data && app.data.category ? esc(app.data.category) + " · " : "") +
+          (app.data && app.data.type ? esc(app.data.type) + " · " : "") +
+          (app.data && app.data.scale ? esc(app.data.scale) : "未填规模") +
+          " · 提交于 " + String(app.created_at || "").slice(0, 10)));
+        row.appendChild(info);
+        if (isAdmin()) {
+          var acts = el("div", "pending-acts");
+          var ok = el("button", "btn btn-primary btn-sm", "通过入库");
+          ok.addEventListener("click", function () { approveOnboard(app); });
+          var no = el("button", "btn btn-ghost btn-sm", "拒绝");
+          no.addEventListener("click", function () { rejectOnboard(app); });
+          acts.appendChild(ok); acts.appendChild(no);
+          row.appendChild(acts);
+        }
+        pend.appendChild(row);
+      });
+      c.appendChild(pend);
+    }
+
     // 搜索 + 筛选
     var tb = el("div", "toolbar");
     var sb = el("div", "search-box");
@@ -1334,7 +3394,7 @@ body[data-theme="dark"] .star { color: #3a4454; }
       });
     });
 
-    var tip = el("div", "hint", "合作状态自动判断规则：有正在做的需求（发包时间≤今天≤DDL）→合作中；测试未通过→终止合作；曾有需求但当前无进行中→静态；无需求→未合作。可在编辑里手动覆盖。");
+    var tip = el("div", "hint", "合作状态自动判断规则：有正在做的需求（开始时间≤今天≤DDL）→合作中；测试未通过→终止合作；曾有需求但当前无进行中→静态；无需求→未合作。可在编辑里手动覆盖。");
     c.appendChild(tip);
   }
 
@@ -1351,11 +3411,8 @@ body[data-theme="dark"] .star { color: #3a4454; }
         if (suppliers.some(function (x) { return x.name === data.name; })) { toast("已存在同名供应商"); return; }
         var ns = Object.assign({ id: uid(), createdAt: todayStr() }, data);
         suppliers.push(ns);
-        // 自动同步到合同管理
-        contracts.push({ id: uid(), supplierId: ns.id, signed: "否", supplierParty: "", ourParty: "", startDate: "", endDate: "", createdAt: todayStr() });
-        saveContracts();
         saveSuppliers();
-        toast("供应商已入库，并已同步到合同管理");
+        toast("供应商已入库，可在合同管理中为其添加合同");
       } else {
         // 重名校验
         if (suppliers.some(function (x) { return x.name === data.name && x.id !== s.id; })) { toast("已存在同名供应商"); return; }
@@ -1376,10 +3433,11 @@ body[data-theme="dark"] .star { color: #3a4454; }
       toast("该供应商已关联 " + linkedDemands + " 条需求、 " + linkedContracts + " 条合同，无法删除（请先解除关联）");
       return;
     }
-    if (!window.confirm("确定删除供应商「" + s.name + "」？")) return;
-    suppliers = suppliers.filter(function (x) { return x.id !== s.id; });
-    contracts = contracts.filter(function (c) { return c.supplierId !== s.id; });
-    saveSuppliers(); saveContracts(); renderSuppliers(); toast("已删除");
+    confirmDialog("删除确认", "确定删除该供应商吗？", function () {
+      suppliers = suppliers.filter(function (x) { return x.id !== s.id; });
+      contracts = contracts.filter(function (c) { return c.supplierId !== s.id; });
+      saveSuppliers(); saveContracts(); renderSuppliers(); toast("已删除");
+    });
   }
 
   function showOnboardLink() {
@@ -1441,7 +3499,7 @@ body[data-theme="dark"] .star { color: #3a4454; }
     var sortItem = el("div", "filter-item");
     sortItem.appendChild(el("span", "", "排序"));
     var sSel = el("select");
-    sSel.innerHTML = '<option value="createdAt">创建时间</option><option value="dispatchDate">发包时间</option><option value="ddl">DDL</option><option value="quoteAmount">报价金额</option>';
+    sSel.innerHTML = '<option value="createdAt">创建时间</option><option value="dispatchDate">开始时间</option><option value="ddl">DDL</option><option value="quoteAmount">报价金额</option>';
     sSel.value = st.sort;
     sSel.addEventListener("change", function () { st.sort = sSel.value; renderDispatch(); });
     sortItem.appendChild(sSel);
@@ -1500,17 +3558,18 @@ body[data-theme="dark"] .star { color: #3a4454; }
         html += "<td>" + esc(d.module || "—") + "</td>";
         html += '<td class="num">' + esc(d.qty || "") + "</td>";
         html += "<td>" + esc(d.workload || "—") + "</td>";
-        html += "<td>" + esc(d.dispatchMonth || "—") + "</td>";
+        html += "<td>" + esc(d.dispatchMonth || (d.createdAt ? String(d.createdAt).slice(0, 7) : "—")) + "</td>";
         html += "<td>" + esc(d.dispatchDate || "—") + "</td>";
         html += "<td>" + (d.ddl ? (d.ddl < todayStr() && d.status !== "已完成" ? '<span style="color:var(--danger)">' + esc(d.ddl) + "</span>" : esc(d.ddl)) : "—") + "</td>";
         html += "<td>" + (d.supplierId ? esc(supplierName(d.supplierId)) : '<span class="muted">—</span>') + "</td>";
-        html += "<td>" + ((d.scheduleFiles || []).length ? "📎" + d.scheduleFiles.length : "—") + "</td>";
+        html += "<td>" + ((d.scheduleFiles || []).length ? '<button class="file-chip" data-sfiles="' + d.id + '">📎 ' + d.scheduleFiles.length + " 个</button>" : '<span class="muted">—</span>') + "</td>";
         html += '<td class="num">' + (d.quoteAmount ? money(d.quoteAmount, d.quoteCurrency) : "—") + "</td>";
+        html += '<td class="num">' + (d.totalManDays ? esc(d.totalManDays) + ' <span class="muted">人天</span>' : "—") + "</td>";
         html += "<td>" + esc(d.acceptDate || "—") + "</td>";
         html += "<td>" + (d.testResult ? (d.testResult === "测试通过" ? '<span class="badge green">测试通过</span>' : '<span class="badge red">测试未通过</span>') + (d.testComment ? '<div class="cell-sub">' + esc(d.testComment) + "</div>" : "") : '<span class="muted">—</span>') + "</td>";
         html += "<td>" + (d.rating ? '<span class="stars" style="color:#f5a623">' + starStr(d.rating) + "</span>" : '<span class="muted">—</span>') + "</td>";
         html += '<td title="' + esc(d.note || "") + '">' + esc((d.note || "").slice(0, 12) || "—") + "</td>";
-        html += '<td><div class="row-actions"><button class="link-btn" data-edit="' + d.id + '">编辑</button></div></td>';
+        html += '<td><div class="row-actions"><button class="link-btn" data-edit="' + d.id + '">编辑</button><button class="link-btn danger" data-del="' + d.id + '">删除</button></div></td>';
         html += "</tr>";
       });
       return html;
@@ -1542,7 +3601,7 @@ body[data-theme="dark"] .star { color: #3a4454; }
   }
 
   function headerHtml() {
-    return "<thead><tr><th>需求名称</th><th>属性</th><th>状态</th><th>需求人</th><th>项目</th><th>模块</th><th class='num'>数量</th><th>内部工作量</th><th>发包月份</th><th>发包时间</th><th>DDL</th><th>供应商</th><th>排期</th><th class='num'>报价</th><th>验收</th><th>测试情况</th><th>评价</th><th>备注</th><th>操作</th></tr></thead>";
+    return "<thead><tr><th>需求名称</th><th>属性</th><th>状态</th><th>需求人</th><th>项目</th><th>模块</th><th class='num'>数量</th><th>内部工作量</th><th>发包月份</th><th>开始时间</th><th>DDL</th><th>供应商</th><th>排期</th><th class='num'>报价</th><th class='num'>总人天</th><th>验收</th><th>测试情况</th><th>评价</th><th>备注</th><th>操作</th></tr></thead>";
   }
 
   function bindDispatchTable(table) {
@@ -1556,6 +3615,25 @@ body[data-theme="dark"] .star { color: #3a4454; }
       b.addEventListener("click", function () {
         var d = demands.find(function (x) { return x.id === b.dataset.edit; });
         if (d) openDemandEditor(d);
+      });
+    });
+    table.querySelectorAll("button[data-sfiles]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var d = demands.find(function (x) { return x.id === b.dataset.sfiles; });
+        if (d) openScheduleFiles(d);
+      });
+    });
+    table.querySelectorAll("button[data-del]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var d = demands.find(function (x) { return x.id === b.dataset.del; });
+        if (!d) return;
+        confirmDialog("删除确认", "确定删除该需求吗？", function () {
+          var idx = demands.indexOf(d);
+          if (idx >= 0) demands.splice(idx, 1);
+          saveDemands();
+          toast("需求已删除");
+          renderDispatch();
+        });
       });
     });
   }
@@ -1573,7 +3651,8 @@ body[data-theme="dark"] .star { color: #3a4454; }
       if (!data.module) { toast("请选择需求模块"); return; }
       var nd = Object.assign({
         id: uid(), status: "未开始", supplierId: "", scheduleFiles: [],
-        quoteAmount: "", quoteCurrency: "RMB", acceptDate: "", testResult: "", testComment: "",
+        dispatchMonth: todayStr().slice(0, 7),
+        quoteAmount: "", quoteCurrency: "RMB", totalManDays: "", acceptDate: "", testResult: "", testComment: "",
         rating: 0, ratingText: "", note: "", createdBy: config.currentUser, createdAt: todayStr(),
         settlement: { completion: 0, settleFiles: [], invoiceFiles: [], confirmed: false }
       }, data);
@@ -1606,9 +3685,14 @@ body[data-theme="dark"] .star { color: #3a4454; }
   function renderContracts(query) {
     var st = moduleState.contracts;
     if (query) { var q = parseQuery(query); for (var k in q) if (k in st) st[k] = q[k]; }
+    // 记录当前表格滚动位置：重建后恢复，避免操作（流转/保存/识别回填）后闪跳回顶
+    var prevWrap = document.querySelector(".table-wrap.contracts-wrap");
+    var prevScroll = prevWrap ? prevWrap.scrollTop : 0;
 
     var c = $("pageContainer"); c.innerHTML = "";
-    c.appendChild(pageHead("合同管理", "合同台账；新增供应商会自动同步生成一条合同记录", []));
+    var btnAdd = el("button", "btn btn-primary", "＋ 添加合同");
+    btnAdd.addEventListener("click", function () { openContractEditor(null, true); });
+    c.appendChild(pageHead("合同管理", "字段标题统一在首行，合同按供应商相邻排列", [btnAdd]));
 
     var tb = el("div", "toolbar");
     var sb = el("div", "search-box");
@@ -1618,16 +3702,16 @@ body[data-theme="dark"] .star { color: #3a4454; }
     var supSel = el("select");
     supSel.innerHTML = '<option value="">全部供应商</option>' + suppliers.map(function (s) { return '<option value="' + s.id + '">' + esc(s.name) + "</option>"; }).join("");
     supSel.value = st.supplier; supSel.addEventListener("change", function () { st.supplier = supSel.value; renderContracts(); });
-    var signedSel = el("select");
-    signedSel.innerHTML = '<option value="">是否签署（全部）</option><option value="是">已签署</option><option value="否">未签署</option>';
-    signedSel.value = st.signed; signedSel.addEventListener("change", function () { st.signed = signedSel.value; renderContracts(); });
+    var flowSel = el("select");
+    flowSel.innerHTML = '<option value="">流转状态（全部）</option>' + FLOW_STEPS.map(function (f) { return '<option value="' + f + '">' + f + "</option>"; }).join("");
+    flowSel.value = st.flow; flowSel.addEventListener("change", function () { st.flow = flowSel.value; renderContracts(); });
     tb.appendChild(el("span", "muted", "供应商")); tb.appendChild(supSel);
-    tb.appendChild(el("span", "muted", "签署")); tb.appendChild(signedSel);
+    tb.appendChild(el("span", "muted", "流转")); tb.appendChild(flowSel);
     c.appendChild(tb);
 
     var list = contracts.filter(function (ct) {
       if (st.supplier && ct.supplierId !== st.supplier) return false;
-      if (st.signed && ct.signed !== st.signed) return false;
+      if (st.flow && (ct.flowStatus || "未提审批") !== st.flow) return false;
       if (st.search) {
         var hay = (supplierName(ct.supplierId) + " " + (ct.supplierParty || "") + " " + (ct.ourParty || "")).toLowerCase();
         if (hay.indexOf(st.search.toLowerCase()) < 0) return false;
@@ -1636,53 +3720,203 @@ body[data-theme="dark"] .star { color: #3a4454; }
     });
 
     if (!list.length) {
-      c.appendChild(emptyBox("▣", "暂无合同记录", "新增供应商后会自动在这里生成对应合同条目。", null));
+      var eBtn = el("button", "btn btn-primary", "＋ 添加第一份合同");
+      eBtn.addEventListener("click", function () { openContractEditor(null, true); });
+      c.appendChild(emptyBox("▣", "暂无合同记录", "点击「添加合同」，为供应商登记合同。", eBtn));
       return;
     }
 
-    var tw = el("div", "table-wrap");
-    var table = el("table", "data-table");
-    var html = "<thead><tr><th>供应商名称</th><th>是否签署合同</th><th>供应商签约主体</th><th>我方签约主体</th><th>合同开始日期</th><th>合同结束日期</th><th>操作</th></tr></thead><tbody>";
-    list.forEach(function (ct) {
-      html += "<tr>";
-      html += "<td><b>" + esc(supplierName(ct.supplierId)) + "</b></td>";
-      html += '<td><select class="cell-select" data-signed="' + ct.id + '"><option value="是"' + (ct.signed === "是" ? " selected" : "") + ">是</option><option value=\"否\"" + (ct.signed === "否" ? " selected" : "") + ">否</option></select></td>";
-      html += "<td>" + esc(ct.supplierParty || "—") + "</td>";
-      html += "<td>" + esc(ct.ourParty || "—") + "</td>";
+    // 按供应商分组排序；表头统一在首行，每份合同占一行竖向展示
+    var sorted = list.slice().sort(function (a, b) {
+      var na = supplierName(a.supplierId).localeCompare(supplierName(b.supplierId), "zh");
+      if (na !== 0) return na;
+      return (a.startDate || "").localeCompare(b.startDate || "");
+    });
+
+    // 统计每个供应商的合同数量（用于首列合并单元格）
+    var runs = [];
+    var lastSid = null;
+    sorted.forEach(function (ct) {
+      if (ct.supplierId !== lastSid) {
+        runs.push({ sid: ct.supplierId, count: 0 });
+        lastSid = ct.supplierId;
+      }
+      runs[runs.length - 1].count++;
+    });
+
+    function flowBtnHtml(ct) {
+      var fidx = FLOW_STEPS.indexOf(ct.flowStatus || "未提审批");
+      if (fidx < 0) fidx = 0;
+      var isDone = fidx >= FLOW_STEPS.length - 1;
+      return '<button class="flow-btn f-' + fidx + '" data-flow="' + ct.id + '"' + (isDone ? " disabled" : "") + ">" + FLOW_STEPS[fidx] + (isDone ? " ✓" : " →") + "</button>";
+    }
+
+    // 收款信息单元格：值 + 复制按钮
+    function copyCell(ct, key) {
+      var v = ct[key] || "";
+      if (!v) return "—";
+      return '<div class="copy-cell"><span title="' + esc(v) + '">' + esc(v) + '</span><button class="copy-btn" data-copy="' + ct.id + '" data-field="' + key + '" title="点击复制">复制</button></div>';
+    }
+    // 普通长文本单元格：超长省略、悬停显示全文
+    function textCell(v) {
+      return v ? '<span class="cell-nowrap" title="' + esc(v) + '">' + esc(v) + "</span>" : "—";
+    }
+
+    var html = '<table class="data-table contracts-table"><thead><tr><th>供应商</th><th>流转状态</th><th>供应商签约主体</th><th>我方签约主体</th><th>收款人全称</th><th>开户行</th><th>银行账号</th><th>SWIFT Code</th><th>开始日期</th><th>结束日期</th><th>附件</th><th>操作</th></tr></thead><tbody>';
+    lastSid = null;
+    var runIdx = -1;
+    sorted.forEach(function (ct) {
+      var isFirst = ct.supplierId !== lastSid;
+      if (isFirst) { lastSid = ct.supplierId; runIdx++; }
+      html += isFirst ? '<tr class="ct-group-start">' : "<tr>";
+      if (isFirst) {
+        var r = runs[runIdx];
+        html += '<td rowspan="' + r.count + '" class="ct-sup-cell"><div class="ct-sup-name">' + esc(supplierName(r.sid)) + '</div><div class="ct-sup-count">共 ' + r.count + " 份</div></td>";
+      }
+      html += "<td>" + flowBtnHtml(ct) + "</td>";
+      html += "<td>" + textCell(ct.supplierParty) + "</td>";
+      html += "<td>" + textCell(ct.ourParty) + "</td>";
+      html += '<td class="cc-payee">' + copyCell(ct, "payeeName") + "</td>";
+      html += '<td class="cc-bank">' + copyCell(ct, "bankName") + "</td>";
+      html += '<td class="cc-account">' + copyCell(ct, "bankAccount") + "</td>";
+      html += '<td class="cc-swift">' + copyCell(ct, "swiftCode") + "</td>";
       html += "<td>" + esc(ct.startDate || "—") + "</td>";
       html += "<td>" + esc(ct.endDate || "—") + "</td>";
-      html += '<td><button class="link-btn" data-edit="' + ct.id + '">编辑</button></td>';
+      html += "<td>" + ((ct.files || []).length ? '<button class="file-chip" data-files="' + ct.id + '">📎 ' + ct.files.length + " 个</button>" : '<button class="link-btn" data-files="' + ct.id + '">上传</button>') + "</td>";
+      html += '<td><button class="link-btn" data-edit="' + ct.id + '">编辑</button><button class="link-btn danger" data-del="' + ct.id + '">删除</button></td>';
       html += "</tr>";
     });
-    html += "</tbody>";
-    table.innerHTML = html;
-    tw.appendChild(table);
-    c.appendChild(tw);
+    html += "</tbody></table>";
 
-    table.querySelectorAll("select[data-signed]").forEach(function (s) {
-      s.addEventListener("change", function () {
-        var ct = contracts.find(function (x) { return x.id === s.dataset.signed; });
-        if (ct) { ct.signed = s.value; saveContracts(); toast("已更新签署状态"); }
+    var wrap = el("div", "table-wrap contracts-wrap");
+    wrap.innerHTML = html;
+    c.appendChild(wrap);
+    // 恢复滚动位置（列表变短时浏览器自动收敛到有效范围）
+    if (prevScroll > 0) wrap.scrollTop = prevScroll;
+
+    wrap.querySelectorAll("button[data-flow]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var ct = contracts.find(function (x) { return x.id === b.dataset.flow; });
+        if (ct) advanceContractFlow(ct);
       });
     });
-    table.querySelectorAll("button[data-edit]").forEach(function (b) {
+    wrap.querySelectorAll("button[data-copy]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var ct = contracts.find(function (x) { return x.id === b.dataset.copy; });
+        if (!ct) return;
+        copyText(ct[b.dataset.field] || "", "已复制");
+      });
+    });
+    wrap.querySelectorAll("button[data-files]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var ct = contracts.find(function (x) { return x.id === b.dataset.files; });
+        if (ct) openContractFiles(ct);
+      });
+    });
+    wrap.querySelectorAll("button[data-edit]").forEach(function (b) {
       b.addEventListener("click", function () {
         var ct = contracts.find(function (x) { return x.id === b.dataset.edit; });
-        if (ct) openContractEditor(ct);
+        if (ct) openContractEditor(ct, false);
+      });
+    });
+    wrap.querySelectorAll("button[data-del]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var ct = contracts.find(function (x) { return x.id === b.dataset.del; });
+        if (!ct) return;
+        confirmDialog("删除确认", "确定删除该合同吗？", function () {
+          var idx = contracts.indexOf(ct);
+          if (idx >= 0) contracts.splice(idx, 1);
+          saveContracts(); toast("已删除合同"); renderContracts();
+        });
       });
     });
   }
 
-  function openContractEditor(ct) {
-    var form = contractForm(ct);
+  // 合同附件管理：查看/下载/删除/不限数量上传
+  function openContractFiles(ct) {
+    if (!Array.isArray(ct.files)) ct.files = [];
+    openFileManager("合同附件", ct.files, saveContracts, renderContracts, "供应商：" + supplierName(ct.supplierId) + " · 点击「预览」可在线查看，无需下载；上传合同文件可自动识别双方签约主体、收款信息与合同起止日期", function (f) {
+      var isContractLike = /\.(docx?|pdf|xlsx?|xls|csv|txt|md|wps|pages)$/i.test(f.name);
+      if (!isContractLike) return;
+      toast("正在识别「" + f.name + "」…");
+      parseContractFile(f, function (res) {
+        if (!res) return;
+        if (res.unsupported) { toast("「" + f.name + "」为 ." + res.unsupported + " 格式，暂不支持识别。请在 Word/WPS 中另存为 .docx 或 PDF 后重新上传"); return; }
+        if (res.parseFail) { toast("「" + f.name + "」文件解析失败，请确认文件未损坏后重试"); return; }
+        if (res.noText) { toast("未能从「" + f.name + "」中提取到文字（可能是扫描件或图片型文件），请上传含文字层的 docx/PDF"); return; }
+        if (res.scanPdf) { toast("「" + f.name + "」是扫描件 PDF，自动识别（OCR）也未能提取到有效内容，请手动填写"); return; }
+        if (res.noFields) { toast("已读取「" + f.name + "」正文，但未识别到签约主体、收款信息或合同日期，请确认上传的是合同文件"); return; }
+        var changed = [];
+        if (res.supplierParty && !ct.supplierParty) { ct.supplierParty = res.supplierParty; changed.push("供应商签约主体（乙方）「" + res.supplierParty + "」"); }
+        if (res.ourParty && !ct.ourParty) {
+          ct.ourParty = res.ourParty;
+          if (config.ourParties.indexOf(res.ourParty) < 0) { config.ourParties.push(res.ourParty); saveConfig(); }
+          changed.push("我方签约主体（甲方）「" + res.ourParty + "」");
+        }
+        if (res.startDate && !ct.startDate) { ct.startDate = res.startDate; changed.push("开始日期 " + res.startDate); }
+        if (res.endDate && !ct.endDate) { ct.endDate = res.endDate; changed.push("结束日期 " + res.endDate); }
+        var conflicts = [];
+        if (res.payeeName) {
+          if (!ct.payeeName) { ct.payeeName = res.payeeName; changed.push("收款人全称「" + res.payeeName + "」"); }
+          else if (ct.payeeName !== res.payeeName) conflicts.push("收款人全称「" + res.payeeName + "」");
+        }
+        if (res.bankName) {
+          if (!ct.bankName) { ct.bankName = res.bankName; changed.push("开户行「" + res.bankName + "」"); }
+          else if (ct.bankName !== res.bankName) conflicts.push("开户行「" + res.bankName + "」");
+        }
+        if (res.bankAccount) {
+          if (!ct.bankAccount) { ct.bankAccount = res.bankAccount; changed.push("银行账号 " + res.bankAccount); }
+          else if (ct.bankAccount !== res.bankAccount) conflicts.push("银行账号 " + res.bankAccount);
+        }
+        if (res.swiftCode) {
+          if (!ct.swiftCode) { ct.swiftCode = res.swiftCode; changed.push("SWIFT Code " + res.swiftCode); }
+          else if (ct.swiftCode !== res.swiftCode) conflicts.push("SWIFT Code " + res.swiftCode);
+        }
+        if (changed.length) {
+          saveContracts(); renderContracts();
+          toast("已从「" + f.name + "」识别：" + changed.join("、") + "，可在编辑中修改");
+        } else if (conflicts.length) {
+          toast("识别到：" + conflicts.join("、") + "，但合同已有值未覆盖，请核对后手动修改");
+        }
+      });
+    }, "contracts/" + ct.id);
+  }
+
+  // 合同流转：点击一次推进到下一流程
+  function advanceContractFlow(ct) {
+    var idx = FLOW_STEPS.indexOf(ct.flowStatus || "未提审批");
+    if (idx < 0) idx = 0;
+    if (idx >= FLOW_STEPS.length - 1) { toast("已到最终流程「已归档」"); return; }
+    ct.flowStatus = FLOW_STEPS[idx + 1];
+    saveContracts();
+    toast("已推进到「" + ct.flowStatus + "」");
+    renderContracts();
+  }
+
+  function openContractEditor(ct, isNew) {
+    var form = contractForm(ct, { isNew: isNew });
     var body = el("div"); body.appendChild(form.node);
     var cancel = el("button", "btn btn-ghost", "取消"); cancel.addEventListener("click", closeModal);
     var save = el("button", "btn btn-primary", "保存");
     save.addEventListener("click", function () {
-      Object.assign(ct, form.collect());
-      saveContracts(); closeModal(); toast("已保存"); renderContracts();
+      if (form.pending() > 0) { toast("合同内容识别中，请稍等片刻再保存"); return; }
+      var data = form.collect();
+      if (!data.ourParty) {
+        if (data.files && data.files.length) toast("合同内容识别中或未识别到甲方，请稍等片刻，或手动选择我方签约主体");
+        else toast("请选择我方签约主体");
+        return;
+      }
+      if (isNew) {
+        if (!data.supplierId) { toast("请选择供应商"); return; }
+        var nct = Object.assign({ id: uid(), createdAt: todayStr(), flowStatus: "未提审批", files: [] }, data);
+        contracts.push(nct);
+        saveContracts(); closeModal(); toast("合同已添加"); renderContracts();
+      } else {
+        Object.assign(ct, data);
+        saveContracts(); closeModal(); toast("已保存"); renderContracts();
+      }
     });
-    openModal("编辑合同", body, el("div"));
+    openModal(isNew ? "添加合同" : "编辑合同", body, el("div"));
     $("modal").querySelector(".modal-foot").appendChild(cancel); $("modal").querySelector(".modal-foot").appendChild(save);
   }
 
@@ -1807,9 +4041,10 @@ body[data-theme="dark"] .star { color: #3a4454; }
 
   function doConfirm(d) {
     if (d.settlement.confirmed) { toast("已结算，不可重复操作"); return; }
-    if (!window.confirm("确认结算「" + d.name + "」？确认后不可撤销。")) return;
-    d.settlement.confirmed = true; d.settlement.confirmedAt = todayStr();
-    saveDemands(); renderSettlement(); toast("已确认结算");
+    confirmDialog("结算确认", "确定确认结算吗？", function () {
+      d.settlement.confirmed = true; d.settlement.confirmedAt = todayStr();
+      saveDemands(); renderSettlement(); toast("已确认结算");
+    }, "确认结算", "btn btn-primary");
   }
   function batchConfirm() {
     var ids = Array.prototype.slice.call(document.querySelectorAll(".sel-row:checked")).map(function (c) { return c.dataset.id; });
@@ -1824,8 +4059,8 @@ body[data-theme="dark"] .star { color: #3a4454; }
     var grid = el("div", "form-grid");
     var sf = (d.settlement.settleFiles || []).slice();
     var iff = (d.settlement.invoiceFiles || []).slice();
-    grid.appendChild(fieldRow("结算单（附件）", fileField(sf, function (f) { sf = f; }), false, true));
-    grid.appendChild(fieldRow("发票（附件）", fileField(iff, function (f) { iff = f; }), false, true));
+    grid.appendChild(fieldRow("结算单（附件）", fileField(sf, function (f) { sf = f; }, "demands/" + d.id + "/settle"), false, true));
+    grid.appendChild(fieldRow("发票（附件）", fileField(iff, function (f) { iff = f; }, "demands/" + d.id + "/invoice"), false, true));
     body.appendChild(grid);
     var cancel = el("button", "btn btn-ghost", "关闭"); cancel.addEventListener("click", closeModal);
     var save = el("button", "btn btn-primary", "保存附件");
@@ -2145,6 +4380,7 @@ body[data-theme="dark"] .star { color: #3a4454; }
   /* ================= 供应商自助入库 ================= */
   function showOnboard() {
     $("appShell").style.display = "none";
+    $("loginPage").hidden = true;
     var ob = $("onboardPage");
     ob.hidden = false;
     var box = $("onboardBox");
@@ -2162,29 +4398,49 @@ body[data-theme="dark"] .star { color: #3a4454; }
     box.appendChild(form.node);
 
     var foot = el("div"); foot.style.cssText = "margin-top:20px;display:flex;gap:10px;";
-    var submit = el("button", "btn btn-primary", "提交入库申请");
+    var submit = el("button", "btn btn-primary", session ? "提交入库" : "提交入库申请");
     submit.style.flex = "1";
-    submit.addEventListener("click", function () {
+    submit.addEventListener("click", async function () {
       var data = form.collect();
       if (!data.name) { toast("请填写供应商名称"); return; }
       if (!data.category) { toast("请选择供应商分类"); return; }
-      var ns = Object.assign({ id: uid(), statusOverride: null, createdAt: todayStr() }, data);
-      suppliers.push(ns);
-      contracts.push({ id: uid(), supplierId: ns.id, signed: "否", supplierParty: "", ourParty: "", startDate: "", endDate: "", createdAt: todayStr() });
-      saveSuppliers(); saveContracts();
-      box.innerHTML = "";
-      var done = el("div", "onboard-done");
-      done.appendChild(el("div", "big", "✅"));
-      done.appendChild(el("h2", "", "提交成功"));
-      done.appendChild(el("p", "muted", "您的入库申请已提交，我们会在审核后与您联系。"));
-      box.appendChild(done);
+      if (session) {
+        // 内部成员提交：直接进入供应商库
+        var ns = Object.assign({ id: uid(), statusOverride: null, createdAt: todayStr() }, data);
+        suppliers.push(ns);
+        saveSuppliers();
+        showOnboardDone(box);
+      } else {
+        // 外部供应商提交：进入待审核申请
+        submit.disabled = true;
+        submit.textContent = "提交中…";
+        var res = await cloud.database.from("spm_onboard").insert({ data: data, status: "pending" });
+        if (res.error) {
+          submit.disabled = false;
+          submit.textContent = "提交入库申请";
+          toast("提交失败：" + (res.error.message || "网络异常，请稍后重试"));
+          return;
+        }
+        showOnboardDone(box);
+      }
     });
     foot.appendChild(submit);
     box.appendChild(foot);
   }
+  function showOnboardDone(box) {
+    box.innerHTML = "";
+    var done = el("div", "onboard-done");
+    done.appendChild(el("div", "big", "✅"));
+    done.appendChild(el("h2", "", "提交成功"));
+    done.appendChild(el("p", "muted", session
+      ? "供应商已录入供应商库。"
+      : "您的入库申请已提交，我们会在审核后与您联系。"));
+    box.appendChild(done);
+  }
   function hideOnboard() {
     $("onboardPage").hidden = true;
     $("appShell").style.display = "";
+    if (!session) $("loginPage").hidden = false;
   }
 
   /* ================= 全局搜索 ================= */
@@ -2233,6 +4489,172 @@ body[data-theme="dark"] .star { color: #3a4454; }
     });
   }
 
+  /* ================= 登录与账号 ================= */
+  var otpPending = null;   // { phone, verificationId, isExistingUser }
+  var sendCdTimer = null;
+
+  function showLogin() {
+    $("appShell").style.display = "none";
+    $("onboardPage").hidden = true;
+    $("loginPage").hidden = false;
+    $("loginLogoMark").textContent = config.logoMark || "供";
+    $("loginLogoMark").style.background = config.primaryColor;
+    $("loginSiteName").textContent = config.siteName;
+  }
+  function hideLogin() {
+    $("loginPage").hidden = true;
+    $("appShell").style.display = "";
+  }
+  function setLoginError(msg) { $("loginError").textContent = msg || ""; }
+
+  function bindLoginEvents() {
+    var phone = $("loginPhone");
+    phone.addEventListener("input", function () { setLoginError(""); });
+    $("loginSendCode").addEventListener("click", async function () {
+      var p = phone.value.trim();
+      if (!/^1\d{10}$/.test(p)) { setLoginError("请输入正确的 11 位手机号"); return; }
+      var btn = $("loginSendCode");
+      btn.disabled = true;
+      var sent = await cloud.auth.sendOtp({ phone: p });
+      if (sent.error) {
+        setLoginError(sent.error.message || "验证码发送失败，请稍后重试");
+        btn.disabled = false;
+        return;
+      }
+      otpPending = { phone: p, verificationId: sent.data.verificationId, isExistingUser: sent.data.isExistingUser };
+      setLoginError("验证码已发送，请查收短信");
+      var n = 60;
+      btn.textContent = n + "s 后重发";
+      clearInterval(sendCdTimer);
+      sendCdTimer = setInterval(function () {
+        n--;
+        if (n <= 0) { clearInterval(sendCdTimer); btn.textContent = "获取验证码"; btn.disabled = false; }
+        else btn.textContent = n + "s 后重发";
+      }, 1000);
+    });
+    $("loginSubmit").addEventListener("click", async function () {
+      var p = phone.value.trim();
+      var code = $("loginCode").value.trim();
+      if (!otpPending || otpPending.phone !== p) { setLoginError("请先获取验证码"); return; }
+      if (!code) { setLoginError("请输入验证码"); return; }
+      var done = await cloud.auth.verifyOtp({
+        phone: otpPending.phone,
+        verificationId: otpPending.verificationId,
+        isExistingUser: otpPending.isExistingUser,
+        token: code
+      });
+      if (done.error) { setLoginError(done.error.message || "验证失败，请重试"); return; }
+      otpPending = null;
+      await afterLogin();
+    });
+    $("loginWechat").addEventListener("click", async function () {
+      setLoginError("");
+      var back = new URL(location.href);
+      back.pathname = "/";
+      back.searchParams.delete("code");
+      back.searchParams.delete("state");
+      back.searchParams.delete("provider");
+      var res = await cloud.auth.signInWithOAuth({ provider: "wechat", redirectTo: back.toString() });
+      if (res.error) { setLoginError(res.error.message || "微信登录暂不可用"); return; }
+      location.assign(res.data.url);
+    });
+  }
+
+  async function restoreAuth() {
+    var url = new URL(location.href);
+    if (!url.searchParams.has("code") && !url.searchParams.has("error")) return;
+    var provider = url.searchParams.get("provider");
+    if (provider !== "wechat" && provider !== "workbuddy") return;
+    var handle = provider === "wechat" ? cloud.auth.handleWechatWebCallback : cloud.auth.handleWorkBuddyCallback;
+    if (typeof handle !== "function") return;
+    var res = await handle.call(cloud.auth);
+    if (res.error) { setLoginError(res.error.message || "登录失败，请重试"); return; }
+    if (res.data) {
+      url.searchParams.delete("code");
+      url.searchParams.delete("state");
+      url.searchParams.delete("provider");
+      history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
+  }
+
+  async function afterLogin() {
+    var s = await cloud.auth.getSession();
+    if (!s.data) { showLogin(); return; }
+    session = s.data;
+    hideLogin();
+    renderUserChip();
+    try {
+      await enterApp();
+    } catch (e) {
+      toast("加载云端数据失败：" + ((e && e.message) || "网络异常"));
+      showLogin();
+    }
+  }
+
+  function renderUserChip() {
+    var chip = $("userChip");
+    if (session && session.user) {
+      chip.textContent = "👤 " + (session.user.name || "用户");
+      chip.classList.add("online");
+    } else {
+      chip.textContent = "未登录";
+      chip.classList.remove("online");
+    }
+    $("logoutBtn").hidden = !session;
+  }
+
+  /* ================= 多人实时同步 ================= */
+  function isBusy() {
+    return $("modalOverlay").classList.contains("show") || $("designPanel").classList.contains("open");
+  }
+  function startSync() {
+    if (syncTimer) clearInterval(syncTimer);
+    syncTimer = setInterval(checkRemote, 15000);
+  }
+  async function checkRemote() {
+    if (!session || isBusy()) return;
+    try {
+      var res = await cloud.database.from("spm_state").select("key, updated_at");
+      if (res.error) return;
+      var changed = false;
+      (res.data || []).forEach(function (r) {
+        if (cacheMeta[r.key] && r.updated_at !== cacheMeta[r.key]) changed = true;
+      });
+      if (changed) {
+        await loadAllFromCloud();
+        applyDesign();
+        buildUserSelect();
+        render();
+        toast("已同步其他成员的更新");
+      }
+      await loadOnboardApps();
+    } catch (e) {}
+  }
+
+  /* ================= 供应商自助入库申请（云端） ================= */
+  async function loadOnboardApps() {
+    if (!session) { onboardApps = []; return; }
+    var res = await cloud.database.from("spm_onboard").select("*")
+      .eq("status", "pending").order("created_at", { ascending: false });
+    onboardApps = res.error ? [] : (res.data || []);
+  }
+  async function approveOnboard(app) {
+    var ns = Object.assign({ id: uid(), statusOverride: null, createdAt: todayStr() }, app.data || {});
+    suppliers.push(ns);
+    saveSuppliers();
+    await cloud.database.from("spm_onboard").delete().eq("id", app.id);
+    onboardApps = onboardApps.filter(function (a) { return a.id !== app.id; });
+    render();
+    toast("已审核入库：「" + ns.name + "」");
+  }
+  async function rejectOnboard(app) {
+    var res = await cloud.database.from("spm_onboard").delete().eq("id", app.id);
+    if (res.error) { toast("操作失败：" + (res.error.message || "云端异常")); return; }
+    onboardApps = onboardApps.filter(function (a) { return a.id !== app.id; });
+    render();
+    toast("已拒绝该入库申请");
+  }
+
   /* ================= 路由 ================= */
   var ROUTES = {
     dashboard: { title: "工作台", render: renderDashboard },
@@ -2263,6 +4685,7 @@ body[data-theme="dark"] .star { color: #3a4454; }
     var rq = routeAndQuery();
     var route = rq.route;
     if (route === "onboard") { showOnboard(); return; }
+    if (!session) { showLogin(); return; }
     hideOnboard();
     var valid = ROUTES[route] ? route : "dashboard";
     setActiveNav(valid);
@@ -2287,13 +4710,110 @@ body[data-theme="dark"] .star { color: #3a4454; }
   var menuToggle = $("menuToggle");
   menuToggle.addEventListener("click", function () { $("sidebar").classList.toggle("collapsed"); });
   window.addEventListener("hashchange", render);
+  $("logoutBtn").addEventListener("click", async function () {
+    try { await cloud.auth.signOut(); } catch (e) {}
+    session = null;
+    renderUserChip();
+    $("appShell").style.display = "none";
+    $("loginPage").hidden = false;
+    toast("已退出登录");
+  });
 
-  buildDesignerUI();
-  applyDesign();
-  buildUserSelect();
-  initSearch();
-  if (!location.hash) location.hash = "#/dashboard";
-  render();
+  async function init() {
+    applyTheme();
+    applySiteInfo();
+    if (typeof WorkBuddyCloud === "undefined") {
+      showLogin();
+      setLoginError("云服务组件加载失败，请刷新页面重试");
+      return;
+    }
+    cloud = WorkBuddyCloud.createWorkBuddyCloud({
+      endpoint: CLOUD_CONFIG.endpoint,
+      oauthRelayBaseUrl: CLOUD_CONFIG.oauthRelayBaseUrl,
+      publishableKey: CLOUD_CONFIG.publishableKey
+    });
+    bindLoginEvents();
+    try { await restoreAuth(); } catch (e) {}
+    var s = null;
+    try { s = await cloud.auth.getSession(); } catch (e) {}
+    if (s && s.data) {
+      session = s.data;
+      hideLogin();
+      renderUserChip();
+      try {
+        await enterApp();
+      } catch (e) {
+        var msg = ((e && e.message) || "网络异常") + (e && e.code ? " [" + e.code + "]" : "");
+        toast("加载云端数据失败：" + msg);
+        setLoginError("云端数据加载失败：" + msg + "　请把这段文字反馈给我们以便排查");
+        showLogin();
+      }
+      return;
+    }
+    showLogin();
+  }
+
+  /* 诊断钩子（用于排查登录后渲染/云端请求问题，不影响正常使用） */
+  window.__spmDebug = {
+    enterApp: enterApp,
+    getCloud: function () { return cloud; },
+    setSessionFake: function (u) { session = { user: u || { name: "诊断测试" } }; },
+    seed: function (supArr, conArr, dmArr) {
+      if (supArr) suppliers = supArr;
+      if (conArr) contracts = conArr;
+      if (dmArr) demands = dmArr;
+    },
+    renderContracts: renderContracts,
+    renderDispatch: renderDispatch,
+    parseScheduleFile: parseScheduleFile,
+    parseContractFile: parseContractFile,
+    getContracts: function () { return contracts; },
+    getSuppliers: function () { return suppliers; },
+    getDemands: function () { return demands; },
+    uploadFileToStorage: uploadFileToStorage,
+    migrateFilesToStorage: migrateFilesToStorage,
+    restorePendingAttachments: restorePendingAttachments,
+    stripCachedDataUrls: stripCachedDataUrls,
+    // 诊断：注入内存版云存储（本地逻辑验证用，不影响生产）
+    mockStorage: function () {
+      var store = {};
+      cloud = {
+        storage: {
+          runtime: {
+            upload: function (path, blob) {
+              return new Promise(function (res) {
+                store[path] = blob;
+                res({ data: { path: path }, error: null });
+              });
+            },
+            download: function (path) {
+              return Promise.resolve(store[path]
+                ? { data: store[path], error: null }
+                : { data: null, error: { message: "not found" } });
+            },
+            remove: function (paths) {
+              (paths || []).forEach(function (p) { delete store[p]; });
+              return Promise.resolve({ data: null, error: null });
+            }
+          }
+        },
+        database: null
+      };
+      window.__mockStore = store;
+    },
+    getState: function () {
+      return {
+        session: !!session,
+        appShellVisible: $("appShell").style.display !== "none",
+        loginVisible: !$("loginPage").hidden,
+        supplierCount: suppliers.length,
+        demandCount: demands.length,
+        contractCount: contracts.length
+      };
+    }
+  };
+
+  init();
 })();
 
 </script>

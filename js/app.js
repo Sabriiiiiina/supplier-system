@@ -258,7 +258,7 @@
     contracts.forEach(function (ct) {
       if (!ct.flowStatus || FLOW_STEPS.indexOf(ct.flowStatus) < 0) ct.flowStatus = "未提审批";
       if (!Array.isArray(ct.files)) ct.files = [];
-      ["payeeName", "bankName", "bankAccount"].forEach(function (k) {
+      ["payeeName", "bankName", "bankAccount", "swiftCode"].forEach(function (k) {
         if (ct[k] == null) ct[k] = "";
       });
     });
@@ -1327,7 +1327,7 @@
   function goodPayeeName(s) {
     if (!s || s.length < 2 || s.length > 50) return "";
     if (/^[、，,。;；:：\s]/.test(s)) return "";
-    if (/(全称|名称|开户|账号|帐号|户名|卡号|地址|电话|联系人|税号|邮箱|邮编|对接|反馈|项目代号|代号|方式)/.test(s)) return "";
+    if (/(全称|名称|开户|账号|帐号|户名|卡号|地址|电话|联系人|税号|邮箱|邮编|对接|反馈|项目代号|代号|方式|Information)/.test(s)) return "";
     return s;
   }
   // 银行简称开头：工行/建行/农行/中国工商银行…（含"银行/支行/分行"等字样时直接通过）
@@ -1343,6 +1343,26 @@
     var digits = String(s || "").replace(/[^0-9]/g, "");
     return (digits.length >= 6 && digits.length <= 32) ? digits : "";
   }
+  // 账号统一清洗：优先保留字母数字（兼容 IBAN），否则退回纯数字清洗
+  function cleanAccountAny(s) {
+    var v = String(s || "").replace(/[\s\-·.]/g, "").toUpperCase();
+    if (/^[A-Z0-9]{6,34}$/.test(v) && /[0-9]/.test(v)) return v;
+    return cleanAccountValue(s);
+  }
+  // 海外合同：SWIFT/BIC 校验（8 或 11 位字母数字，至少含一个字母）
+  function goodSwiftCode(s) {
+    var v = String(s || "").replace(/[\s\-]/g, "").toUpperCase();
+    if (!/^[A-Z0-9]{8,11}$/.test(v) || !/[A-Z]/.test(v)) return "";
+    return v;
+  }
+  // 海外合同：英文银行名（含字母、非纯数字、不含账号/收款人字样）
+  function goodEnglishBankName(s) {
+    var v = String(s || "").replace(/^[：:，,\s]+/, "").replace(/[，,。;；、\s]+$/, "").trim();
+    if (!v || v.length < 2 || v.length > 60) return "";
+    if (!/[A-Za-z]/.test(v)) return "";
+    if (/(账号|帐号|Account|Beneficiary|Swift|SWIFT|BIC)/i.test(v)) return "";
+    return v;
+  }
   /* 定位收款账户信息段落：先用紧凑文本（去全部空白）匹配标题——PDF 逐字提取带空格/换行也能命中，再映射回原文取段 */
   function findBankSegment(t) {
     var compact = t.replace(/\s+/g, "");
@@ -1350,7 +1370,9 @@
     var pats = [
       "乙方收款账户信息", "乙方收款账号信息", "乙方收款信息", "乙方账户信息",
       "收款账户信息", "收款账号信息", "收款账户", "收款信息",
-      "付款方式", "付款信息", "付款账户信息", "收款方式", "账户信息"
+      "付款方式", "付款信息", "付款账户信息", "收款方式", "账户信息",
+      "Beneficiary Bank Information", "Beneficiary Bank Info", "Beneficiary Information",
+      "Bank Details", "Banking Details", "Payment Details", "Payment Information"
     ];
     var pos = -1;
     for (var i = 0; i < pats.length && pos < 0; i++) {
@@ -1377,7 +1399,7 @@
   }
   /* 指定文本范围内提取收款三字段；所有命中须归属乙方侧（标签前最近主体标记不是甲方）；excludeNames 与甲方名一致的收款人被拒绝 */
   function extractBankFromText(t, inSegment, excludeNames) {
-    var out = { payeeName: "", bankName: "", bankAccount: "" };
+    var out = { payeeName: "", bankName: "", bankAccount: "", swiftCode: "" };
     if (!t) return out;
     var m, i;
     // 归属判断：该位置之前最近的主体标记是甲方还是乙方（无标记返回""）
@@ -1438,10 +1460,31 @@
       out.bankAccount = val;
       break;
     }
+    // —— 海外合同英文标签识别：Beneficiary Name / Account Number / Bank Name / Swift Code ——
+    var engPayeeRe = /(Beneficiary\s+Name|Beneficiary['’]s\s+Name|Beneficiary(?!\s*(?:Bank|Information|Details|Account|Address|Company|Name)))[：:，,\s]*([^\n，,。;；、]{2,80})/gi;
+    while (!out.payeeName && (m = engPayeeRe.exec(t))) {
+      var epv = goodPayeeName(m[2].replace(/^[：:，,\s]+/, "").replace(/[，,。;；、\s]+$/, ""));
+      if (epv && !isExcluded(epv)) out.payeeName = epv;
+    }
+    var engBankRe = /(Beneficiary\s+Bank|Bank\s+Name)[：:，,\s]*([^\n，,。;；、]{2,80})/gi;
+    while (!out.bankName && (m = engBankRe.exec(t))) {
+      var ebv = goodEnglishBankName(m[2]);
+      if (ebv) out.bankName = ebv;
+    }
+    var engAccRe = /(Account\s+Number|Account\s+No\.?|Account\s*#|IBAN|Account)[：:，,\s]*([A-Za-z0-9][A-Za-z0-9 \t\-·.]{4,45})/gi;
+    while (!out.bankAccount && (m = engAccRe.exec(t))) {
+      var eav = String(m[2]).replace(/[\s\-·.]/g, "").toUpperCase();
+      if (/^[A-Z0-9]{6,34}$/.test(eav) && /[0-9]/.test(eav)) out.bankAccount = eav;
+    }
+    var engSwiftRe = /(Swift\s*Code|SWIFT\s*Code|SWIFT|BIC\s*Code|BIC)[：:，,\s]*([A-Za-z0-9][A-Za-z0-9 \t\-]{4,20})/gi;
+    while (!out.swiftCode && (m = engSwiftRe.exec(t))) {
+      var esv = goodSwiftCode(m[2]);
+      if (esv) out.swiftCode = esv;
+    }
     return out;
   }
   function extractBankInfo(text, excludeNames) {
-    var out = { payeeName: "", bankName: "", bankAccount: "" };
+    var out = { payeeName: "", bankName: "", bankAccount: "", swiftCode: "" };
     if (!text) return out;
     var t = String(text).replace(/\r/g, "").replace(/\u3000/g, " ");
     // 繁体/异体字归一化：帐(U+5E10)/帳(U+5E33)/賬(U+8CAC)→账；戸/戶→户（合同常见"帐号/帐户名"写法）
@@ -1508,19 +1551,20 @@
   }
   function gridTagKind(cell) {
     var s = gridCellText(cell).replace(/[：:\s]/g, "");
-    if (/(收款人全称|收款人名称|收款单位|收款方|账户名|账户名称|单位名称|公司名称|户名|开户名|开户名称)/.test(s)) return "payee";
-    if (/(开户行|开户银行|开户支行|收款银行|银行名称)/.test(s)) return "bank";
-    if (/(银行账号|银行帐号|收款账号|收款账户|收款帐号|开户账号|打款账号|账户号|银行卡号|账号|帐号|卡号)/.test(s)) return "acc";
+    if (/(Swift\s*Code|SWIFT|BIC)/i.test(s)) return "swift";
+    if (/(银行账号|银行帐号|收款账号|收款账户|收款帐号|开户账号|打款账号|账户号|银行卡号|账号|帐号|卡号|Account\s*Number|Account\s*No\.?|IBAN|Bank\s*Account)/i.test(s)) return "acc";
+    if (/(开户行|开户银行|开户支行|收款银行|银行名称|Beneficiary\s*Bank|Beneficiary['’]s\s*Bank|Bank\s*Name|Bank$)/i.test(s)) return "bank";
+    if (/(收款人全称|收款人名称|收款单位|收款方|账户名|账户名称|单位名称|公司名称|户名|开户名|开户名称|Beneficiary\s*Name|Beneficiary['’]s\s*Name)/i.test(s)) return "payee";
     return "";
   }
   function extractBankFromGrid(rows) {
-    var out = { payeeName: "", bankName: "", bankAccount: "" };
+    var out = { payeeName: "", bankName: "", bankAccount: "", swiftCode: "" };
     if (!Array.isArray(rows) || !rows.length) return out;
     // A) 横向表头：一行内出现 >=2 个银行类标签，标签所在列下方数据行取值
-    var labelRow = -1, labelCols = { payee: -1, bank: -1, acc: -1 };
+    var labelRow = -1, labelCols = { payee: -1, bank: -1, acc: -1, swift: -1 };
     for (var r = 0; r < rows.length; r++) {
       var row = rows[r] || [];
-      var found = { payee: -1, bank: -1, acc: -1 }, cnt = 0;
+      var found = { payee: -1, bank: -1, acc: -1, swift: -1 }, cnt = 0;
       for (var c = 0; c < row.length; c++) {
         var k = gridTagKind(row[c]);
         if (k && found[k] < 0) { found[k] = c; cnt++; }
@@ -1535,12 +1579,16 @@
           if (pv) out.payeeName = pv;
         }
         if (labelCols.bank >= 0 && !out.bankName) {
-          var bv = goodBankName(gridCellText(drow[labelCols.bank]));
+          var bv = goodBankName(gridCellText(drow[labelCols.bank])) || goodEnglishBankName(gridCellText(drow[labelCols.bank]));
           if (bv) out.bankName = bv;
         }
         if (labelCols.acc >= 0 && !out.bankAccount) {
-          var av = cleanAccountValue(gridCellText(drow[labelCols.acc]));
+          var av = cleanAccountAny(gridCellText(drow[labelCols.acc]));
           if (av) out.bankAccount = av;
+        }
+        if (labelCols.swift >= 0 && !out.swiftCode) {
+          var sv = goodSwiftCode(gridCellText(drow[labelCols.swift]));
+          if (sv) out.swiftCode = sv;
         }
         if (out.payeeName && out.bankName && out.bankAccount) break;
       }
@@ -1567,8 +1615,9 @@
           }
           if (!val) continue;
           if (k2 === "payee" && !out.payeeName) { var pv2 = goodPayeeName(val); if (pv2) out.payeeName = pv2; }
-          else if (k2 === "bank" && !out.bankName) { var bv2 = goodBankName(val); if (bv2) out.bankName = bv2; }
-          else if (k2 === "acc" && !out.bankAccount) { var av2 = cleanAccountValue(val); if (av2) out.bankAccount = av2; }
+          else if (k2 === "bank" && !out.bankName) { var bv2 = goodBankName(val) || goodEnglishBankName(val); if (bv2) out.bankName = bv2; }
+          else if (k2 === "acc" && !out.bankAccount) { var av2 = cleanAccountAny(val); if (av2) out.bankAccount = av2; }
+          else if (k2 === "swift" && !out.swiftCode) { var sv2 = goodSwiftCode(val); if (sv2) out.swiftCode = sv2; }
         }
         if (out.payeeName && out.bankName && out.bankAccount) return true;
       }
@@ -1625,11 +1674,12 @@
       // 收款信息：框架部分优先；不足时全文兜底（提取内部已做乙方归属检查与甲方名排除）
       var exclude = jia ? [jia] : [];
       var bank = bankOverride || extractBankInfo(ft, exclude);
-      if (strict && (!bank.payeeName || !bank.bankName || !bank.bankAccount)) {
+      if (strict && (!bank.payeeName || !bank.bankName || !bank.bankAccount || !bank.swiftCode)) {
         var fullB = extractBankInfo(text, exclude);
         if (!bank.payeeName) bank.payeeName = fullB.payeeName;
         if (!bank.bankName) bank.bankName = fullB.bankName;
         if (!bank.bankAccount) bank.bankAccount = fullB.bankAccount;
+        if (!bank.swiftCode) bank.swiftCode = fullB.swiftCode;
       }
       // OCR 扫描件：乙方主体常识别不全（如「郑州数学黎」），而收款段落质量高——收款人全称即乙方账号名称，用它兜底
       if (bank.payeeName && /(公司|工作室|团队|中心|事务所|研究院|集团|厂|店|社)/.test(bank.payeeName)) {
@@ -1637,8 +1687,8 @@
           yi = bank.payeeName;
         }
       }
-      if (!jia && !yi && !dates.startDate && !dates.endDate && !bank.payeeName && !bank.bankName && !bank.bankAccount) { cb({ noFields: true }); return; }
-      cb({ ourParty: jia, supplierParty: yi, startDate: dates.startDate, endDate: dates.endDate, payeeName: bank.payeeName, bankName: bank.bankName, bankAccount: bank.bankAccount });
+      if (!jia && !yi && !dates.startDate && !dates.endDate && !bank.payeeName && !bank.bankName && !bank.bankAccount && !bank.swiftCode) { cb({ noFields: true }); return; }
+      cb({ ourParty: jia, supplierParty: yi, startDate: dates.startDate, endDate: dates.endDate, payeeName: bank.payeeName, bankName: bank.bankName, bankAccount: bank.bankAccount, swiftCode: bank.swiftCode });
     }
     if (["txt", "md", "log"].indexOf(ext) >= 0) {
       finish(decodeTextBytes(bytes()));
@@ -1653,7 +1703,8 @@
         finish(text, {
           payeeName: gBank.payeeName || tBank.payeeName,
           bankName: gBank.bankName || tBank.bankName,
-          bankAccount: gBank.bankAccount || tBank.bankAccount
+          bankAccount: gBank.bankAccount || tBank.bankAccount,
+          swiftCode: gBank.swiftCode || tBank.swiftCode
         });
       } catch (e) { cb({ parseFail: true }); }
     } else if (ext === "docx") {
@@ -1941,6 +1992,7 @@
     grid.appendChild(fieldRow("收款人全称", makeInput("text", "payeeName", c ? c.payeeName : "", "如：XX科技有限公司")));
     grid.appendChild(fieldRow("开户行", makeInput("text", "bankName", c ? c.bankName : "", "如：招商银行北京分行")));
     grid.appendChild(fieldRow("银行账号", makeInput("text", "bankAccount", c ? c.bankAccount : "", "请输入银行账号")));
+    grid.appendChild(fieldRow("SWIFT Code", makeInput("text", "swiftCode", c ? c.swiftCode : "", "海外合同必填（SWIFT/BIC，8 或 11 位），国内合同可留空")));
     grid.appendChild(fieldRow("合同开始日期", makeInput("date", "startDate", c ? c.startDate : "")));
     grid.appendChild(fieldRow("合同结束日期", makeInput("date", "endDate", c ? c.endDate : "")));
 
@@ -2004,6 +2056,13 @@
           else if (aInp.value.trim() !== res.bankAccount) conflicts.push("银行账号 " + res.bankAccount);
         }
       }
+      if (res.swiftCode) {
+        var swInp = grid.querySelector('[data-key="swiftCode"]');
+        if (swInp) {
+          if (!swInp.value.trim()) { swInp.value = res.swiftCode; changed.push("SWIFT Code " + res.swiftCode); }
+          else if (swInp.value.trim() !== res.swiftCode) conflicts.push("SWIFT Code " + res.swiftCode);
+        }
+      }
       if (changed.length) {
         var missed = [];
         if (!res.ourParty) missed.push("我方签约主体");
@@ -2043,6 +2102,7 @@
         payeeName: grid.querySelector('[data-key="payeeName"]').value.trim(),
         bankName: grid.querySelector('[data-key="bankName"]').value.trim(),
         bankAccount: grid.querySelector('[data-key="bankAccount"]').value.trim(),
+        swiftCode: grid.querySelector('[data-key="swiftCode"]').value.trim(),
         startDate: grid.querySelector('[data-key="startDate"]').value,
         endDate: grid.querySelector('[data-key="endDate"]').value,
         files: ctFiles
@@ -2645,7 +2705,7 @@
       return v ? '<span class="cell-nowrap" title="' + esc(v) + '">' + esc(v) + "</span>" : "—";
     }
 
-    var html = '<table class="data-table contracts-table"><thead><tr><th>供应商</th><th>流转状态</th><th>供应商签约主体</th><th>我方签约主体</th><th>收款人全称</th><th>开户行</th><th>银行账号</th><th>开始日期</th><th>结束日期</th><th>附件</th><th>操作</th></tr></thead><tbody>';
+    var html = '<table class="data-table contracts-table"><thead><tr><th>供应商</th><th>流转状态</th><th>供应商签约主体</th><th>我方签约主体</th><th>收款人全称</th><th>开户行</th><th>银行账号</th><th>SWIFT Code</th><th>开始日期</th><th>结束日期</th><th>附件</th><th>操作</th></tr></thead><tbody>';
     lastSid = null;
     var runIdx = -1;
     sorted.forEach(function (ct) {
@@ -2662,6 +2722,7 @@
       html += '<td class="cc-payee">' + copyCell(ct, "payeeName") + "</td>";
       html += '<td class="cc-bank">' + copyCell(ct, "bankName") + "</td>";
       html += '<td class="cc-account">' + copyCell(ct, "bankAccount") + "</td>";
+      html += '<td class="cc-swift">' + copyCell(ct, "swiftCode") + "</td>";
       html += "<td>" + esc(ct.startDate || "—") + "</td>";
       html += "<td>" + esc(ct.endDate || "—") + "</td>";
       html += "<td>" + ((ct.files || []).length ? '<button class="file-chip" data-files="' + ct.id + '">📎 ' + ct.files.length + " 个</button>" : '<button class="link-btn" data-files="' + ct.id + '">上传</button>') + "</td>";
@@ -2749,6 +2810,10 @@
         if (res.bankAccount) {
           if (!ct.bankAccount) { ct.bankAccount = res.bankAccount; changed.push("银行账号 " + res.bankAccount); }
           else if (ct.bankAccount !== res.bankAccount) conflicts.push("银行账号 " + res.bankAccount);
+        }
+        if (res.swiftCode) {
+          if (!ct.swiftCode) { ct.swiftCode = res.swiftCode; changed.push("SWIFT Code " + res.swiftCode); }
+          else if (ct.swiftCode !== res.swiftCode) conflicts.push("SWIFT Code " + res.swiftCode);
         }
         if (changed.length) {
           saveContracts(); renderContracts();

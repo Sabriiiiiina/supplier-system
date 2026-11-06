@@ -771,9 +771,10 @@ body[data-theme="dark"] .contracts-table thead th:first-child { background: #1b2
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 10%, transparent);
 }
 .copy-btn:active { transform: translateY(1px); }
-/* 收款三列：按最长内容统一列宽，保证各行复制按钮对齐 */
+/* 收款四列：按最长内容统一列宽，保证各行复制按钮对齐 */
 .contracts-table td.cc-payee, .contracts-table td.cc-bank { min-width: 185px; }
 .contracts-table td.cc-account { min-width: 235px; }
+.contracts-table td.cc-swift { min-width: 150px; }
 /* 主体/名称类长文本：超长省略，悬停可见全文 */
 .cell-nowrap {
   display: inline-block;
